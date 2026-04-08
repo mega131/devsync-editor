@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CodeSync — Real-Time Collaborative Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<style>
+  :root {
+    --bg-0: #0a0b0f;
+    --bg-1: #111318;
+    --bg-2: #181b22;
+    --bg-3: #1e2230;
+    --bg-4: #252a38;
+    --border: #2a2f42;
+    --border-bright: #3a4060;
+    --accent: #5b8aff;
+    --accent-2: #a78bfa;
+    --accent-3: #34d399;
+    --accent-red: #f87171;
+    --accent-yellow: #fbbf24;
+    --text-0: #f0f2ff;
+    --text-1: #b8bdd4;
+    --text-2: #6b7280;
+    --text-3: #404560;
+    --user-1: #5b8aff;
+    --user-2: #a78bfa;
+    --user-3: #34d399;
+    --user-4: #f87171;
+    --user-5: #fbbf24;
+    --panel-w: 220px;
+    --tabs-h: 38px;
+    --header-h: 52px;
+    --status-h: 24px;
+    --radius: 6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg-0);
+    color: var(--text-0);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    height: var(--header-h);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text-0);
+    flex-shrink: 0;
+  }
+
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .room-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-1);
+  }
+
+  .room-info:hover { border-color: var(--border-bright); }
+
+  .room-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-3);
+    box-shadow: 0 0 6px var(--accent-3);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .avatars-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    margin-left: -8px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.15s;
+    font-family: 'Syne', sans-serif;
+  }
+
+  .avatar:first-child { margin-left: 0; }
+  .avatar:hover { transform: translateY(-3px) scale(1.1); z-index: 10; }
+
+  .avatar-1 { background: var(--user-1); }
+  .avatar-2 { background: var(--user-2); }
+  .avatar-3 { background: var(--user-3); color: #000; }
+  .avatar-4 { background: var(--user-4); }
+
+  .avatar-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%; transform: translateX(-50%);
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    font-size: 11px;
+    color: var(--text-0);
+    pointer-events: none;
+  }
+
+  .avatar:hover .avatar-tooltip { display: block; }
+
+  .btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-1);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { background: var(--bg-3); color: var(--text-0); border-color: var(--border-bright); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-primary:hover { background: #6f9bff; transform: translateY(-1px); }
+
+  .btn-run {
+    background: linear-gradient(135deg, var(--accent-3), #10b981);
+    color: #000;
+    font-weight: 700;
+    padding: 6px 16px;
+  }
+
+  .btn-run:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(52, 211, 153, 0.3); }
+
+  /* ─── MAIN LAYOUT ─── */
+  .workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ─── SIDEBAR ─── */
+  .sidebar {
+    width: var(--panel-w);
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-section {
+    padding: 12px 12px 8px;
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+
+  .file-tree { flex: 1; overflow-y: auto; }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-1);
+    transition: all 0.1s;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .file-item:hover { background: var(--bg-3); color: var(--text-0); }
+  .file-item.active { background: var(--bg-4); color: var(--text-0); }
+
+  .file-icon { font-size: 13px; flex-shrink: 0; }
+
+  .file-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .sidebar-divider { height: 1px; background: var(--border); margin: 8px 12px; }
+
+  /* ─── COLLABORATORS PANEL ─── */
+  .collab-panel {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .collab-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 4px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+  }
+
+  .collab-avatar {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .collab-info { flex: 1; min-width: 0; }
+  .collab-name { font-size: 12px; color: var(--text-0); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .collab-status { font-size: 10px; color: var(--text-2); font-family: 'JetBrains Mono', monospace; }
+
+  .collab-cursor-indicator {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ─── EDITOR AREA ─── */
+  .editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── TABS ─── */
+  .tabs-bar {
+    height: var(--tabs-h);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 8px;
+    gap: 2px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+
+  .tabs-bar::-webkit-scrollbar { height: 0; }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    height: 32px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-2);
+    border: 1px solid transparent;
+    border-bottom: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.1s;
+    position: relative;
+  }
+
+  .tab:hover { background: var(--bg-2); color: var(--text-1); }
+
+  .tab.active {
+    background: var(--bg-0);
+    color: var(--text-0);
+    border-color: var(--border);
+    border-bottom-color: var(--bg-0);
+  }
+
+  .tab .tab-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tab .tab-close {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    color: var(--text-3);
+    opacity: 0;
+    transition: all 0.1s;
+  }
+
+  .tab:hover .tab-close { opacity: 1; }
+  .tab .tab-close:hover { background: var(--bg-4); color: var(--accent-red); }
+
+  .tab-user-cursors {
+    display: flex;
+    gap: 2px;
+    margin-left: 2px;
+  }
+
+  .tab-cursor {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+  }
+
+  .tabs-new {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-3);
+    font-size: 16px;
+    transition: all 0.1s;
+    margin-left: 4px;
+    align-self: center;
+  }
+
+  .tabs-new:hover { background: var(--bg-3); color: var(--text-0); }
+
+  /* ─── TOOLBAR ─── */
+  .editor-toolbar {
+    height: 36px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .toolbar-divider { width: 1px; height: 18px; background: var(--border); margin: 0 6px; }
+
+  .toolbar-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-2);
+    font-size: 13px;
+    transition: all 0.1s;
+    border: none;
+    background: none;
+  }
+
+  .toolbar-btn:hover { background: var(--bg-3); color: var(--text-0); }
+
+  .toolbar-select {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .toolbar-select:focus { border-color: var(--accent); }
+
+  .live-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--accent-3);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent-3);
+    animation: pulse 1.5s infinite;
+  }
+
+  /* ─── EDITOR + OUTPUT SPLIT ─── */
+  .editor-split {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .editor-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #monaco-editor {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ─── CURSOR OVERLAY ─── */
+  .cursor-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 10;
+    width: 100%; height: 100%;
+  }
+
+  .remote-cursor {
+    position: absolute;
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    pointer-events: none;
+    animation: cursorAppear 0.2s ease-out;
+  }
+
+  @keyframes cursorAppear {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .remote-cursor-line {
+    width: 2px;
+    height: 18px;
+    border-radius: 1px;
+  }
+
+  .remote-cursor-label {
+    font-size: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 0 3px 3px 3px;
+    white-space: nowrap;
+    margin-top: -1px;
+    letter-spacing: 0.3px;
+  }
+
+  /* ─── OUTPUT PANEL ─── */
+  .output-panel {
+    width: 360px;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background: var(--bg-1);
+  }
+
+  .panel-header {
+    height: 36px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .panel-tabs {
+    display: flex;
+    gap: 0;
+  }
+
+  .panel-tab {
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    color: var(--text-2);
+    border-bottom: 2px solid transparent;
+    transition: all 0.1s;
+  }
+
+  .panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel-tab:hover:not(.active) { color: var(--text-1); }
+
+  .output-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .output-content::-webkit-scrollbar { width: 4px; }
+  .output-content::-webkit-scrollbar-track { background: transparent; }
+  .output-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .output-line { margin-bottom: 2px; }
+  .output-success { color: var(--accent-3); }
+  .output-error { color: var(--accent-red); }
+  .output-info { color: var(--accent); }
+  .output-warn { color: var(--accent-yellow); }
+  .output-dim { color: var(--text-2); }
+  .output-prompt { color: var(--text-3); }
+  .output-number { color: var(--accent-yellow); }
+
+  /* ─── CHAT PANEL ─── */
+  .chat-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .chat-panel.visible { display: flex; }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chat-msg {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .chat-msg-avatar {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .chat-msg-body { flex: 1; min-width: 0; }
+  .chat-msg-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
+  .chat-msg-name { font-size: 11px; font-weight: 700; }
+  .chat-msg-time { font-size: 10px; color: var(--text-2); font-family: 'JetBrains Mono', monospace; }
+  .chat-msg-text { font-size: 12px; color: var(--text-1); line-height: 1.5; word-break: break-word; }
+
+  .chat-input-row {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .chat-input {
+    flex: 1;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: var(--text-0);
+    font-size: 12px;
+    font-family: 'Syne', sans-serif;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-input::placeholder { color: var(--text-3); }
+
+  .chat-send {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    color: white;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .chat-send:hover { background: #6f9bff; }
+
+  /* ─── STATUS BAR ─── */
+  .status-bar {
+    height: var(--status-h);
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255,255,255,0.9);
+  }
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    opacity: 0.85;
+    cursor: default;
+  }
+
+  .status-item:hover { opacity: 1; }
+  .status-sep { opacity: 0.3; }
+  .status-right { margin-left: auto; display: flex; gap: 16px; }
+
+  /* ─── NOTIFICATION TOAST ─── */
+  .toast-container {
+    position: fixed;
+    top: 64px;
+    right: 16px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .toast {
+    background: var(--bg-3);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-0);
+    animation: toastIn 0.25s ease-out;
+    min-width: 240px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .toast-icon { font-size: 16px; }
+  .toast-title { font-weight: 700; }
+  .toast-body { color: var(--text-1); font-size: 11px; }
+
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--bg-2);
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    padding: 24px;
+    width: 440px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    animation: modalIn 0.2s ease-out;
+  }
+
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+  .modal-sub { font-size: 12px; color: var(--text-2); margin-bottom: 20px; }
+
+  .modal-field { margin-bottom: 14px; }
+  .modal-label { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-2); margin-bottom: 6px; display: block; }
+
+  .modal-input {
+    width: 100%;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 12px;
+    color: var(--text-0);
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .modal-input:focus { border-color: var(--accent); }
+
+  .share-link {
+    display: flex;
+    gap: 6px;
+  }
+
+  .share-link .modal-input { flex: 1; cursor: text; }
+
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* scrollbars */
+  .sidebar::-webkit-scrollbar,
+  .output-content::-webkit-scrollbar,
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track,
+  .output-content::-webkit-scrollbar-track,
+  .chat-messages::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb,
+  .output-content::-webkit-scrollbar-thumb,
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ─── RESIZE HANDLE ─── */
+  .resize-handle {
+    width: 4px;
+    background: transparent;
+    cursor: col-resize;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .resize-handle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .resize-handle:hover::after { opacity: 0.4; }
+
+  /* ─── LOADING ─── */
+  #editor-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-0);
+    z-index: 20;
+    gap: 16px;
+  }
+
+  .loading-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 13px;
+    color: var(--text-2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ─── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    Code<span>Sync</span>
+  </div>
+
+  <div class="room-info" onclick="openShareModal()">
+    <div class="room-dot"></div>
+    Room: <strong style="color:var(--text-0)">frost-alpha-7</strong>
+    <span style="color:var(--text-3)">·</span>
+    <span>4 online</span>
+  </div>
+
+  <div class="header-actions">
+    <div class="avatars-row" id="avatars-row">
+      <div class="avatar avatar-1" title="You (Alex)">A<div class="avatar-tooltip">Alex (You)</div></div>
+      <div class="avatar avatar-2">M<div class="avatar-tooltip">Maria — Line 14</div></div>
+      <div class="avatar avatar-3">J<div class="avatar-tooltip">James — Line 28</div></div>
+      <div class="avatar avatar-4">S<div class="avatar-tooltip">Sara — Line 7</div></div>
+    </div>
+
+    <button class="btn btn-ghost" onclick="openShareModal()">
+      🔗 Invite
+    </button>
+
+    <button class="btn btn-run" id="run-btn" onclick="runCode()">
+      ▶ Run
+    </button>
+  </div>
+</header>
+
+<!-- ─── WORKSPACE ─── -->
+<div class="workspace">
+
+  <!-- ─── SIDEBAR ─── -->
+  <div class="sidebar">
+    <div class="sidebar-section file-tree">
+      <div class="sidebar-label">Explorer</div>
+      <div class="file-item" onclick="openFile('main.js')">
+        <span class="file-icon">📄</span> main.js
+        <div class="file-dot" style="background:var(--accent-yellow)"></div>
+      </div>
+      <div class="file-item active" onclick="openFile('server.js')">
+        <span class="file-icon">🟩</span> server.js
+        <div class="file-dot" style="background:var(--user-2)"></div>
+      </div>
+      <div class="file-item" onclick="openFile('socket.js')">
+        <span class="file-icon">🔌</span> socket.js
+      </div>
+      <div class="file-item" onclick="openFile('editor.css')">
+        <span class="file-icon">🎨</span> editor.css
+      </div>
+      <div class="file-item" onclick="openFile('package.json')">
+        <span class="file-icon">📦</span> package.json
+      </div>
+      <div class="file-item" onclick="openFile('README.md')">
+        <span class="file-icon">📝</span> README.md
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="collab-panel">
+      <div class="sidebar-label">Collaborators</div>
+      <div class="collab-user">
+        <div class="collab-avatar avatar-1">A</div>
+        <div class="collab-info">
+          <div class="collab-name">Alex (You)</div>
+          <div class="collab-status">ln 1, col 1</div>
+        </div>
+        <div class="collab-cursor-indicator" style="background:var(--user-1)"></div>
+      </div>
+      <div class="collab-user">
+        <div class="collab-avatar avatar-2">M</div>
+        <div class="collab-info">
+          <div class="collab-name">Maria</div>
+          <div class="collab-status" id="maria-pos">ln 14, col 22</div>
+        </div>
+        <div class="collab-cursor-indicator" style="background:var(--user-2)"></div>
+      </div>
+      <div class="collab-user">
+        <div class="collab-avatar avatar-3">J</div>
+        <div class="collab-info">
+          <div class="collab-name">James</div>
+          <div class="collab-status" id="james-pos">ln 28, col 8</div>
+        </div>
+        <div class="collab-cursor-indicator" style="background:var(--user-3)"></div>
+      </div>
+      <div class="collab-user">
+        <div class="collab-avatar avatar-4">S</div>
+        <div class="collab-info">
+          <div class="collab-name">Sara</div>
+          <div class="collab-status" id="sara-pos">ln 7, col 15</div>
+        </div>
+        <div class="collab-cursor-indicator" style="background:var(--user-4)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── EDITOR AREA ─── -->
+  <div class="editor-area">
+    <!-- Tabs -->
+    <div class="tabs-bar">
+      <div class="tab" id="tab-main" onclick="switchTab('main')">
+        <div class="tab-dot" style="background:#f7df1e"></div>
+        main.js
+        <span class="tab-close" onclick="event.stopPropagation()">×</span>
+      </div>
+      <div class="tab active" id="tab-server" onclick="switchTab('server')">
+        <div class="tab-dot" style="background:var(--user-2)"></div>
+        server.js
+        <div class="tab-user-cursors">
+          <div class="tab-cursor" style="background:var(--user-2)"></div>
+        </div>
+        <span class="tab-close" onclick="event.stopPropagation()">×</span>
+      </div>
+      <div class="tab" id="tab-socket" onclick="switchTab('socket')">
+        <div class="tab-dot" style="background:#a78bfa"></div>
+        socket.js
+        <span class="tab-close" onclick="event.stopPropagation()">×</span>
+      </div>
+      <div class="tabs-new" title="New file">+</div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="editor-toolbar">
+      <div class="toolbar-group">
+        <select class="toolbar-select" id="lang-select" onchange="changeLanguage(this.value)">
+          <option value="javascript">JavaScript</option>
+          <option value="typescript">TypeScript</option>
+          <option value="python">Python</option>
+          <option value="java">Java</option>
+          <option value="cpp">C++</option>
+          <option value="rust">Rust</option>
+          <option value="go">Go</option>
+          <option value="html">HTML</option>
+          <option value="css">CSS</option>
+          <option value="json">JSON</option>
+        </select>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button class="toolbar-btn" title="Format Code" onclick="formatCode()">⚡</button>
+        <button class="toolbar-btn" title="Word Wrap" onclick="toggleWrap()">↩</button>
+        <button class="toolbar-btn" title="Find" onclick="triggerFind()">🔍</button>
+        <button class="toolbar-btn" title="Settings">⚙</button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <select class="toolbar-select" onchange="changeTheme(this.value)">
+          <option value="vs-dark">Dark</option>
+          <option value="vs">Light</option>
+          <option value="hc-black">High Contrast</option>
+        </select>
+      </div>
+
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        LIVE — 3 editing
+      </div>
+    </div>
+
+    <!-- Editor + Output -->
+    <div class="editor-split">
+      <div class="editor-container">
+        <div id="editor-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading Monaco Editor...</div>
+        </div>
+        <div id="monaco-editor"></div>
+        <div class="cursor-overlay" id="cursor-overlay"></div>
+      </div>
+
+      <div class="resize-handle"></div>
+
+      <!-- Output Panel -->
+      <div class="output-panel">
+        <div class="panel-header">
+          <div class="panel-tabs">
+            <div class="panel-tab active" onclick="switchPanel('output', this)">OUTPUT</div>
+            <div class="panel-tab" onclick="switchPanel('chat', this)">CHAT <span style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 5px;font-size:9px;margin-left:2px;">3</span></div>
+            <div class="panel-tab" onclick="switchPanel('history', this)">HISTORY</div>
+          </div>
+        </div>
+
+        <!-- Output Content -->
+        <div class="output-content" id="panel-output">
+          <div class="output-line output-dim">$ node server.js</div>
+          <div class="output-line output-success">✓ Server started on port 3000</div>
+          <div class="output-line output-success">✓ WebSocket server initialized</div>
+          <div class="output-line output-info">→ Room "frost-alpha-7" created</div>
+          <div class="output-line output-dim">  Waiting for connections...</div>
+          <div class="output-line" style="margin-top:8px"></div>
+          <div class="output-line output-info">→ Maria joined the room</div>
+          <div class="output-line output-info">→ James joined the room</div>
+          <div class="output-line output-info">→ Sara joined the room</div>
+          <div class="output-line" style="margin-top:8px"></div>
+          <div class="output-line output-warn">⚠ 3 users editing simultaneously</div>
+          <div class="output-line output-dim">  OT queue depth: 0</div>
+          <div class="output-line output-success">✓ All changes synchronized</div>
+          <div class="output-line" style="margin-top:8px"></div>
+          <div class="output-line output-prompt">▶ Ready to run code</div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div id="panel-chat" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg">
+              <div class="chat-msg-avatar avatar-2">M</div>
+              <div class="chat-msg-body">
+                <div class="chat-msg-meta">
+                  <span class="chat-msg-name" style="color:var(--user-2)">Maria</span>
+                  <span class="chat-msg-time">2:41 PM</span>
+                </div>
+                <div class="chat-msg-text">Hey! I'm working on the socket connection handler on line 14</div>
+              </div>
+            </div>
+            <div class="chat-msg">
+              <div class="chat-msg-avatar avatar-3">J</div>
+              <div class="chat-msg-body">
+                <div class="chat-msg-meta">
+                  <span class="chat-msg-name" style="color:var(--user-3)">James</span>
+                  <span class="chat-msg-time">2:43 PM</span>
+                </div>
+                <div class="chat-msg-text">Cool! I'll handle the broadcast logic below. Should we use rooms or namespaces?</div>
+              </div>
+            </div>
+            <div class="chat-msg">
+              <div class="chat-msg-avatar avatar-4">S</div>
+              <div class="chat-msg-body">
+                <div class="chat-msg-meta">
+                  <span class="chat-msg-name" style="color:var(--user-4)">Sara</span>
+                  <span class="chat-msg-time">2:44 PM</span>
+                </div>
+                <div class="chat-msg-text">Rooms make more sense for isolated sessions 👍</div>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input-row">
+            <input class="chat-input" id="chat-input" placeholder="Message teammates..." onkeydown="sendChatOnEnter(event)" />
+            <button class="chat-send" onclick="sendChat()">➤</button>
+          </div>
+        </div>
+
+        <!-- History Panel -->
+        <div id="panel-history" style="display:none; flex:1; overflow:hidden;">
+          <div class="output-content">
+            <div class="output-line output-dim" style="margin-bottom:10px">Edit History</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="border-left:2px solid var(--user-2);padding-left:8px">
+                <div style="font-size:10px;color:var(--text-2);margin-bottom:2px">Maria · 2:41 PM</div>
+                <div style="font-size:11px;color:var(--text-1)">Added socket connection handler</div>
+                <div style="font-size:10px;color:var(--text-3)">+12 lines at ln 14</div>
+              </div>
+              <div style="border-left:2px solid var(--user-3);padding-left:8px">
+                <div style="font-size:10px;color:var(--text-2);margin-bottom:2px">James · 2:43 PM</div>
+                <div style="font-size:11px;color:var(--text-1)">Implemented broadcast function</div>
+                <div style="font-size:10px;color:var(--text-3)">+8 lines at ln 28</div>
+              </div>
+              <div style="border-left:2px solid var(--user-1);padding-left:8px">
+                <div style="font-size:10px;color:var(--text-2);margin-bottom:2px">Alex (You) · 2:44 PM</div>
+                <div style="font-size:11px;color:var(--text-1)">Set up Express server boilerplate</div>
+                <div style="font-size:10px;color:var(--text-3)">+22 lines at ln 1</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── STATUS BAR ─── -->
+<div class="status-bar">
+  <div class="status-item">⚡ CodeSync</div>
+  <div class="status-sep">|</div>
+  <div class="status-item">🟢 Connected</div>
+  <div class="status-sep">|</div>
+  <div class="status-item" id="status-lang">JavaScript</div>
+  <div class="status-sep">|</div>
+  <div class="status-item" id="status-pos">Ln 1, Col 1</div>
+  <div class="status-right">
+    <div class="status-item">UTF-8</div>
+    <div class="status-item">LF</div>
+    <div class="status-item" id="status-users">4 collaborators</div>
+  </div>
+</div>
+
+<!-- ─── SHARE MODAL ─── -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal">
+    <div class="modal-title">🔗 Invite Collaborators</div>
+    <div class="modal-sub">Share this link to invite others to your room</div>
+
+    <div class="modal-field">
+      <label class="modal-label">Room Link</label>
+      <div class="share-link">
+        <input class="modal-input" value="https://codesync.dev/room/frost-alpha-7" readonly id="share-url" />
+        <button class="btn btn-primary" onclick="copyLink()">Copy</button>
+      </div>
+    </div>
+
+    <div class="modal-field">
+      <label class="modal-label">Invite by Email</label>
+      <input class="modal-input" type="email" placeholder="colleague@company.com" />
+    </div>
+
+    <div class="modal-field">
+      <label class="modal-label">Permission</label>
+      <select class="modal-input" style="cursor:pointer">
+        <option>Can edit</option>
+        <option>Can view</option>
+        <option>Owner</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeShareModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="sendInvite()">Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST CONTAINER ─── -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ─── INITIAL CODE SAMPLES ───
+const codeSamples = {
+  'server.js': `const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+
+const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.IO with CORS
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3001',
+    methods: ['GET', 'POST']
+  }
+});
+
+app.use(cors());
+app.use(express.json());
+
+// In-memory room state (Phase 5: replace with PostgreSQL)
+const rooms = new Map();
+
+// ─── Socket.IO Connection Handler ───
+io.on('connection', (socket) => {
+  console.log(\`[+] User connected: \${socket.id}\`);
+
+  // Join a collaborative room
+  socket.on('join-room', ({ roomId, userId, username }) => {
+    socket.join(roomId);
+    
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, {
+        users: new Map(),
+        code: '',
+        language: 'javascript',
+        cursors: {}
+      });
+    }
+
+    const room = rooms.get(roomId);
+    room.users.set(socket.id, { userId, username, cursor: null });
+
+    // Send current room state to new user
+    socket.emit('room-state', {
+      code: room.code,
+      language: room.language,
+      users: Array.from(room.users.values()),
+      cursors: room.cursors
+    });
+
+    // Notify others
+    socket.to(roomId).emit('user-joined', { userId, username });
+    console.log(\`[→] \${username} joined room: \${roomId}\`);
+  });
+
+  // Handle code changes (OT will be applied in Phase 2)
+  socket.on('code-change', ({ roomId, delta, version }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    
+    room.code = delta.newValue;
+    socket.to(roomId).emit('remote-code-change', { delta, version });
+  });
+
+  // Broadcast cursor positions
+  socket.on('cursor-move', ({ roomId, cursor, userId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    
+    room.cursors[userId] = cursor;
+    socket.to(roomId).emit('remote-cursor', { cursor, userId });
+  });
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    rooms.forEach((room, roomId) => {
+      const user = room.users.get(socket.id);
+      if (user) {
+        room.users.delete(socket.id);
+        io.to(roomId).emit('user-left', { userId: user.userId });
+        console.log(\`[-] \${user.username} left room: \${roomId}\`);
+      }
+    });
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', rooms: rooms.size });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(\`✓ CodeSync server running on port \${PORT}\`);
+});`,
+
+  'main.js': `// CodeSync Client Entry Point
+import { createApp } from 'vue';
+import App from './App.vue';
+import { setupSocket } from './socket';
+import { setupEditor } from './editor';
+
+// Initialize the collaborative session
+async function init() {
+  const roomId = new URLSearchParams(window.location.search).get('room')
+    || generateRoomId();
+  
+  const userId = localStorage.getItem('userId') || crypto.randomUUID();
+  localStorage.setItem('userId', userId);
+
+  // Connect to WebSocket server
+  const socket = await setupSocket({
+    serverUrl: import.meta.env.VITE_SERVER_URL,
+    roomId,
+    userId,
+    username: 'Alex'
+  });
+
+  // Mount Vue app with socket context
+  const app = createApp(App);
+  app.provide('socket', socket);
+  app.provide('roomId', roomId);
+  app.mount('#app');
+}
+
+function generateRoomId() {
+  const words = ['frost', 'ember', 'storm', 'nova', 'alpha'];
+  const pick = () => words[Math.floor(Math.random() * words.length)];
+  return \`\${pick()}-\${pick()}-\${Math.floor(Math.random() * 10)}\`;
+}
+
+init().catch(console.error);`,
+
+  'socket.js': `// Real-time collaboration socket handler
+import { io } from 'socket.io-client';
+
+let socket = null;
+
+export async function setupSocket({ serverUrl, roomId, userId, username }) {
+  socket = io(serverUrl, {
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: 5
+  });
+
+  return new Promise((resolve, reject) => {
+    socket.on('connect', () => {
+      console.log('[Socket] Connected:', socket.id);
+      
+      socket.emit('join-room', { roomId, userId, username });
+      resolve(socket);
+    });
+
+    socket.on('connect_error', reject);
+
+    socket.on('disconnect', (reason) => {
+      console.warn('[Socket] Disconnected:', reason);
+    });
+  });
+}
+
+export function emitCodeChange(delta, version) {
+  socket?.emit('code-change', { delta, version });
+}
+
+export function emitCursorMove(cursor) {
+  socket?.emit('cursor-move', { cursor });
+}
+
+export function getSocket() {
+  return socket;
+}`
+};
+
+// ─── MONACO EDITOR SETUP ───
+let editor = null;
+let currentFile = 'server.js';
+let isWordWrap = false;
+
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+
+require(['vs/editor/editor.main'], function () {
+  // Custom CodeSync theme
+  monaco.editor.defineTheme('codesync-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '4a5570', fontStyle: 'italic' },
+      { token: 'keyword', foreground: '5b8aff' },
+      { token: 'string', foreground: '34d399' },
+      { token: 'number', foreground: 'fbbf24' },
+      { token: 'type', foreground: 'a78bfa' },
+      { token: 'function', foreground: '93c5fd' },
+      { token: 'variable', foreground: 'f0f2ff' },
+    ],
+    colors: {
+      'editor.background': '#0a0b0f',
+      'editor.foreground': '#f0f2ff',
+      'editor.lineHighlightBackground': '#111318',
+      'editorLineNumber.foreground': '#2a2f42',
+      'editorLineNumber.activeForeground': '#5b8aff',
+      'editor.selectionBackground': '#5b8aff33',
+      'editor.inactiveSelectionBackground': '#5b8aff1a',
+      'editorCursor.foreground': '#5b8aff',
+      'editorGutter.background': '#0a0b0f',
+      'scrollbarSlider.background': '#2a2f4266',
+      'scrollbarSlider.hoverBackground': '#3a406066',
+      'editorWidget.background': '#111318',
+      'editorWidget.border': '#2a2f42',
+      'input.background': '#181b22',
+      'input.border': '#2a2f42',
+    }
+  });
+
+  editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+    value: codeSamples['server.js'],
+    language: 'javascript',
+    theme: 'codesync-dark',
+    fontSize: 13,
+    fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+    fontLigatures: true,
+    lineHeight: 22,
+    minimap: { enabled: true, renderCharacters: false },
+    scrollBeyondLastLine: false,
+    smoothScrolling: true,
+    cursorBlinking: 'smooth',
+    cursorSmoothCaretAnimation: 'on',
+    roundedSelection: true,
+    renderLineHighlight: 'gutter',
+    padding: { top: 12, bottom: 12 },
+    wordWrap: 'off',
+    tabSize: 2,
+    folding: true,
+    bracketPairColorization: { enabled: true },
+    guides: { bracketPairs: true, indentation: true },
+    suggestOnTriggerCharacters: true,
+    quickSuggestions: true,
+    parameterHints: { enabled: true },
+    formatOnType: true,
+    autoClosingBrackets: 'always',
+    autoClosingQuotes: 'always',
+    linkedEditing: true,
+  });
+
+  // Hide loading
+  document.getElementById('editor-loading').style.display = 'none';
+
+  // Track cursor position for status bar
+  editor.onDidChangeCursorPosition(e => {
+    document.getElementById('status-pos').textContent =
+      `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+  });
+
+  // Simulate remote cursors
+  simulateRemoteCursors();
+  simulateCursorMovement();
+});
+
+// ─── SIMULATED REMOTE CURSORS ───
+const remoteCursors = [
+  { id: 'maria', name: 'Maria', color: '#a78bfa', line: 14, col: 22 },
+  { id: 'james', name: 'James', color: '#34d399', line: 28, col: 8 },
+  { id: 'sara',  name: 'Sara',  color: '#f87171', line: 7,  col: 15 },
+];
+
+function simulateRemoteCursors() {
+  setTimeout(() => {
+    renderCursors();
+  }, 1500);
+}
+
+function renderCursors() {
+  if (!editor) return;
+  const overlay = document.getElementById('cursor-overlay');
+  overlay.innerHTML = '';
+
+  remoteCursors.forEach(c => {
+    const pos = editor.getScrolledVisiblePosition(
+      new monaco.Position(c.line, c.col)
+    );
+    if (!pos) return;
+
+    const el = document.createElement('div');
+    el.className = 'remote-cursor';
+    el.style.left = (pos.left + 56) + 'px';
+    el.style.top = pos.top + 'px';
+
+    el.innerHTML = `
+      <div class="remote-cursor-line" style="background:${c.color}"></div>
+      <div class="remote-cursor-label" style="background:${c.color};color:${c.id==='james'?'#000':'#fff'}">${c.name}</div>
+    `;
+    overlay.appendChild(el);
+  });
+}
+
+function simulateCursorMovement() {
+  setInterval(() => {
+    remoteCursors.forEach(c => {
+      // Simulate subtle movement
+      c.col = Math.max(1, c.col + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 3));
+      if (Math.random() > 0.85) {
+        c.line = Math.max(1, c.line + (Math.random() > 0.5 ? 1 : -1));
+      }
+
+      // Update sidebar status
+      const el = document.getElementById(`${c.id}-pos`);
+      if (el) el.textContent = `ln ${c.line}, col ${c.col}`;
+    });
+    renderCursors();
+  }, 2500);
+}
+
+// ─── EDITOR ACTIONS ───
+function changeLanguage(lang) {
+  if (!editor) return;
+  const model = editor.getModel();
+  monaco.editor.setModelLanguage(model, lang);
+  document.getElementById('status-lang').textContent =
+    lang.charAt(0).toUpperCase() + lang.slice(1);
+}
+
+function changeTheme(theme) {
+  if (theme === 'vs-dark') theme = 'codesync-dark';
+  monaco.editor.setTheme(theme);
+}
+
+function formatCode() {
+  editor?.getAction('editor.action.formatDocument')?.run();
+  showToast('✨', 'Formatted', 'Code formatted successfully');
+}
+
+function toggleWrap() {
+  if (!editor) return;
+  isWordWrap = !isWordWrap;
+  editor.updateOptions({ wordWrap: isWordWrap ? 'on' : 'off' });
+}
+
+function triggerFind() {
+  editor?.getAction('actions.find')?.run();
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
+  
+  const file = tab + '.js';
+  currentFile = file;
+  if (editor && codeSamples[file]) {
+    editor.setValue(codeSamples[file]);
+  }
+}
+
+function openFile(filename) {
+  document.querySelectorAll('.file-item').forEach(f => f.classList.remove('active'));
+  event.target.closest('.file-item').classList.add('active');
+  if (editor && codeSamples[filename]) {
+    editor.setValue(codeSamples[filename]);
+  }
+}
+
+// ─── RUN CODE ───
+async function runCode() {
+  const btn = document.getElementById('run-btn');
+  btn.textContent = '⏳ Running...';
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+
+  const code = editor?.getValue() || '';
+  const output = document.getElementById('panel-output');
+
+  // Switch to output tab
+  switchPanel('output', document.querySelector('.panel-tab'));
+
+  output.innerHTML = `
+    <div class="output-line output-dim">$ node ${currentFile}</div>
+    <div class="output-line output-dim" id="run-progress">  Executing in sandbox...</div>
+  `;
+
+  // Simulate code execution
+  await delay(800);
+
+  try {
+    // Safe eval for demo (Phase 3 will use Docker sandbox)
+    const logs = [];
+    const origLog = console.log;
+    const origErr = console.error;
+
+    console.log = (...args) => logs.push({ type: 'log', msg: args.join(' ') });
+    console.error = (...args) => logs.push({ type: 'error', msg: args.join(' ') });
+
+    try {
+      new Function(code)();
+    } catch(e) {
+      logs.push({ type: 'error', msg: e.message });
+    }
+
+    console.log = origLog;
+    console.error = origErr;
+
+    output.innerHTML = `<div class="output-line output-dim">$ node ${currentFile}</div>`;
+
+    if (logs.length === 0) {
+      output.innerHTML += `<div class="output-line output-success">✓ Executed successfully (no output)</div>`;
+    } else {
+      logs.forEach(l => {
+        output.innerHTML += `<div class="output-line ${l.type === 'error' ? 'output-error' : 'output-success'}">${
+          l.type === 'error' ? '✗ ' : '→ '}${escapeHtml(l.msg)}</div>`;
+      });
+    }
+  } catch (e) {
+    output.innerHTML += `<div class="output-line output-error">✗ ${escapeHtml(e.message)}</div>`;
+  }
+
+  output.innerHTML += `<div class="output-line output-dim" style="margin-top:8px">Process exited</div>`;
+
+  btn.textContent = '▶ Run';
+  btn.disabled = false;
+  btn.style.opacity = '1';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── PANEL SWITCHER ───
+function switchPanel(panel, tabEl) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  tabEl?.classList.add('active');
+
+  document.getElementById('panel-output').style.display = panel === 'output' ? 'block' : 'none';
+  document.getElementById('panel-chat').style.display = panel === 'chat' ? 'flex' : 'none';
+  document.getElementById('panel-history').style.display = panel === 'history' ? 'block' : 'none';
+}
+
+// ─── CHAT ───
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  const msgs = document.getElementById('chat-messages');
+  const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  msgs.innerHTML += `
+    <div class="chat-msg">
+      <div class="chat-msg-avatar avatar-1">A</div>
+      <div class="chat-msg-body">
+        <div class="chat-msg-meta">
+          <span class="chat-msg-name" style="color:var(--user-1)">Alex (You)</span>
+          <span class="chat-msg-time">${now}</span>
+        </div>
+        <div class="chat-msg-text">${escapeHtml(msg)}</div>
+      </div>
+    </div>`;
+
+  msgs.scrollTop = msgs.scrollHeight;
+  input.value = '';
+}
+
+function sendChatOnEnter(e) {
+  if (e.key === 'Enter') sendChat();
+}
+
+// ─── SHARE MODAL ───
+function openShareModal() {
+  document.getElementById('share-modal').classList.add('open');
+}
+
+function closeShareModal() {
+  document.getElementById('share-modal').classList.remove('open');
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(document.getElementById('share-url').value);
+  showToast('📋', 'Copied!', 'Room link copied to clipboard');
+}
+
+function sendInvite() {
+  closeShareModal();
+  showToast('✉️', 'Invite sent', 'Your collaborator will receive an email shortly');
+}
+
+// ─── TOAST ───
+function showToast(icon, title, body, duration = 3000) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <div>
+      <div class="toast-title">${title}</div>
+      ${body ? `<div class="toast-body">${body}</div>` : ''}
+    </div>`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), duration);
+}
+
+// ─── UTILS ───
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Close modal on backdrop click
+document.getElementById('share-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeShareModal();
+});
+
+// Welcome toast
+setTimeout(() => {
+  showToast('🎉', 'Room ready', '3 collaborators are online');
+}, 1200);
+
+setTimeout(() => {
+  showToast('✏️', 'Maria is editing', 'server.js — line 14');
+}, 3500);
+</script>
+</body>
+</html>

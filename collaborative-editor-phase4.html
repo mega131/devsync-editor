@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CodeSync — Phase 4</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="/socket.io.min.js"></script>
+<style>
+:root{
+  --bg0:#0a0b0f;--bg1:#111318;--bg2:#181b22;--bg3:#1e2230;--bg4:#252a38;
+  --bd:#2a2f42;--bd2:#3a4060;
+  --ac:#5b8aff;--ac2:#a78bfa;--ac3:#34d399;--red:#f87171;--yel:#fbbf24;
+  --t0:#f0f2ff;--t1:#b8bdd4;--t2:#6b7280;--t3:#404560;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Syne',sans-serif;background:var(--bg0);color:var(--t0);display:flex;flex-direction:column;font-size:13px}
+
+header{height:52px;background:var(--bg1);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800}
+.logo-icon{width:28px;height:28px;background:linear-gradient(135deg,var(--ac),var(--ac2));border-radius:7px;display:grid;place-items:center;font-size:14px}
+.logo b{color:var(--ac)}
+.pill{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-family:'JetBrains Mono',monospace;border:1px solid var(--bd);background:var(--bg2)}
+.pill.ok{border-color:var(--ac3);color:var(--ac3)}
+.pill.no{border-color:var(--red);color:var(--red)}
+.pill.wait{border-color:var(--yel);color:var(--yel)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.ok .dot{animation:pulse 2s infinite}
+.room-badge{padding:5px 12px;background:var(--bg2);border:1px solid var(--bd);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t1);cursor:pointer;display:flex;align-items:center;gap:6px}
+.room-badge:hover{border-color:var(--bd2)}
+.room-id{color:var(--t0);font-weight:700}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.avs{display:flex;align-items:center}
+.av{width:28px;height:28px;border-radius:50%;border:2px solid var(--bg1);display:grid;place-items:center;font-size:10px;font-weight:700;margin-left:-8px;cursor:pointer;position:relative}
+.av:first-child{margin-left:0}
+.av:hover{transform:translateY(-3px);z-index:5}
+.av-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:4px 8px;white-space:nowrap;font-size:11px;z-index:20}
+.av:hover .av-tip{display:block}
+.btn{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-size:12px;font-weight:600;transition:all .15s}
+.btn-ghost{background:transparent;color:var(--t1);border:1px solid var(--bd)}
+.btn-ghost:hover{background:var(--bg3);color:var(--t0)}
+.btn-primary{background:var(--ac);color:#fff}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-run{background:linear-gradient(135deg,var(--ac3),#10b981);color:#000;font-weight:700;padding:6px 18px}
+.btn-run:hover{box-shadow:0 4px 16px rgba(52,211,153,.35)}
+.btn-run:disabled{opacity:.5;cursor:not-allowed}
+
+.workspace{display:flex;flex:1;overflow:hidden;min-height:0}
+
+/* SIDEBAR */
+.sidebar{width:200px;background:var(--bg1);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.sb-sec{padding:10px 12px 6px}
+.sb-lbl{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:6px}
+.file-item{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:4px;cursor:pointer;color:var(--t1);font-size:12px;font-family:'JetBrains Mono',monospace;user-select:none}
+.file-item:hover{background:var(--bg3);color:var(--t0)}
+.file-item.active{background:var(--bg4);color:var(--t0)}
+.divider{height:1px;background:var(--bd);margin:6px 12px}
+.collab-list{flex:1;overflow-y:auto;padding:4px 12px 12px;display:flex;flex-direction:column;gap:4px}
+.cu{display:flex;align-items:center;gap:7px;padding:3px 2px}
+.cu-av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;flex-shrink:0}
+.cu-name{font-size:11px;font-weight:600}
+.cu-status{font-size:10px;color:var(--t2);font-family:'JetBrains Mono',monospace}
+
+/* EDITOR AREA */
+.editor-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.tabs{height:38px;background:var(--bg1);border-bottom:1px solid var(--bd);display:flex;align-items:flex-end;padding:0 8px;gap:1px;flex-shrink:0}
+.tab{display:flex;align-items:center;gap:6px;padding:0 14px;height:32px;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--t2);border:1px solid transparent;border-bottom:none;white-space:nowrap;user-select:none}
+.tab:hover{background:var(--bg2);color:var(--t1)}
+.tab.active{background:var(--bg0);color:var(--t0);border-color:var(--bd);border-bottom-color:var(--bg0)}
+.tab-dot{width:6px;height:6px;border-radius:50%}
+.toolbar{height:36px;background:var(--bg2);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 12px;gap:6px;flex-shrink:0}
+.lang-sel{background:var(--bg3);border:1px solid var(--bd);color:var(--t1);border-radius:4px;padding:3px 8px;font-size:11px;font-family:'JetBrains Mono',monospace;outline:none;cursor:pointer}
+.lang-sel:focus{border-color:var(--ac)}
+.tb-div{width:1px;height:18px;background:var(--bd);margin:0 4px}
+.ot-badge{margin-left:auto;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.ot-ok{background:rgba(52,211,153,.15);color:var(--ac3);border:1px solid rgba(52,211,153,.3)}
+.ot-pending{background:rgba(91,138,255,.15);color:var(--ac);border:1px solid rgba(91,138,255,.3);animation:pulse .8s infinite}
+
+/* THE EDITOR SPLIT */
+.editor-split{flex:1;display:flex;overflow:hidden;min-height:0}
+
+/* TEXTAREA CODE EDITOR */
+.code-wrap{flex:1;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.line-nums{position:absolute;left:0;top:0;bottom:0;width:50px;background:var(--bg0);border-right:1px solid var(--bd);padding:14px 6px 0;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:22px;color:var(--t3);text-align:right;pointer-events:none;overflow:hidden;user-select:none;z-index:2;white-space:pre;word-break:normal}
+.code-editor{flex:1;resize:none;border:none;outline:none;background:var(--bg0);color:var(--t0);font-family:'JetBrains Mono',monospace;font-size:13px;line-height:22px;padding:14px 14px 14px 62px;tab-size:2;white-space:pre;overflow-wrap:normal;overflow-x:auto;caret-color:var(--ac);spellcheck:false;-webkit-spellcheck:false}
+.code-editor::selection{background:rgba(91,138,255,.3)}
+.code-editor::-webkit-scrollbar{width:6px;height:6px}
+.code-editor::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+
+/* SIDE PANEL */
+.side-panel{width:320px;border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;background:var(--bg1)}
+.panel-tabs{height:36px;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 10px;flex-shrink:0}
+.ptab{padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;color:var(--t2);border-bottom:2px solid transparent;user-select:none}
+.ptab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.ptab:hover:not(.active){color:var(--t1)}
+.p-badge{background:var(--ac);color:#fff;border-radius:3px;padding:1px 5px;font-size:9px;margin-left:3px}
+/* output */
+.out-body{flex:1;overflow-y:auto;padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.8}
+.out-body::-webkit-scrollbar,.chat-msgs::-webkit-scrollbar,.log-body::-webkit-scrollbar{width:4px}
+.out-body::-webkit-scrollbar-thumb,.chat-msgs::-webkit-scrollbar-thumb,.log-body::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+.o-dim{color:var(--t2)}.o-ok{color:var(--ac3)}.o-err{color:var(--red)}.o-warn{color:var(--yel)}.o-info{color:var(--ac)}
+/* chat */
+.chat-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.chat-msg{display:flex;gap:8px}
+.chat-av{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;flex-shrink:0}
+.chat-body{flex:1;min-width:0}
+.chat-meta{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
+.chat-name{font-size:11px;font-weight:700}
+.chat-time{font-size:10px;color:var(--t2);font-family:'JetBrains Mono',monospace}
+.chat-text{font-size:12px;color:var(--t1);line-height:1.5;word-break:break-word}
+.typing-row{min-height:18px;padding:2px 12px;font-size:11px;color:var(--t2);font-style:italic;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.tdots{display:flex;gap:3px}
+.tdot{width:4px;height:4px;border-radius:50%;background:var(--ac3);animation:bounce .8s infinite}
+.tdot:nth-child(2){animation-delay:.15s}.tdot:nth-child(3){animation-delay:.3s}
+.chat-footer{padding:8px 12px;border-top:1px solid var(--bd);display:flex;gap:6px;flex-shrink:0}
+.chat-input{flex:1;background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:7px 10px;color:var(--t0);font-size:12px;font-family:'Syne',sans-serif;outline:none}
+.chat-input:focus{border-color:var(--ac)}
+.chat-input::placeholder{color:var(--t3)}
+.chat-send{width:30px;height:30px;background:var(--ac);border:none;border-radius:4px;cursor:pointer;color:#fff;font-size:14px;flex-shrink:0}
+.chat-send:hover{filter:brightness(1.1)}
+/* log */
+.log-body{flex:1;overflow-y:auto;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7}
+
+/* STATUS BAR */
+.status-bar{height:24px;background:var(--ac);display:flex;align-items:center;padding:0 12px;gap:14px;flex-shrink:0;font-size:11px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.9)}
+.s-item{opacity:.85;display:flex;align-items:center;gap:4px}.s-item:hover{opacity:1}
+.s-sep{opacity:.3}.s-right{margin-left:auto;display:flex;gap:14px}
+
+/* TOASTS */
+.toasts{position:fixed;top:62px;right:14px;z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--t0);animation:slidein .25s ease-out;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.toast-icon{font-size:15px}.toast-title{font-weight:700;margin-bottom:1px}.toast-sub{color:var(--t1);font-size:11px}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:12px;padding:24px;width:420px;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.modal-title{font-size:17px;font-weight:800;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--t2);margin-bottom:18px}
+.modal-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px}
+.modal-inp{width:100%;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;padding:8px 12px;color:var(--t0);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;margin-bottom:12px}
+.modal-inp:focus{border-color:var(--ac)}
+.modal-row{display:flex;gap:6px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* ═══════════════ PHASE 4 STYLES ═══════════════ */
+
+/* Auth / Login Screen */
+.auth-screen{position:fixed;inset:0;background:var(--bg0);z-index:1000;display:flex;align-items:center;justify-content:center;}
+.auth-card{background:var(--bg2);border:1px solid var(--bd2);border-radius:16px;padding:36px;width:420px;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+.auth-logo{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;margin-bottom:6px}
+.auth-logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--ac),var(--ac2));border-radius:9px;display:grid;place-items:center;font-size:18px}
+.auth-sub{font-size:13px;color:var(--t2);margin-bottom:28px}
+.auth-tabs{display:flex;gap:2px;background:var(--bg3);border-radius:6px;padding:3px;margin-bottom:20px}
+.auth-tab{flex:1;padding:7px;text-align:center;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700;color:var(--t2)}
+.auth-tab.active{background:var(--bg0);color:var(--t0)}
+.auth-field{margin-bottom:14px}
+.auth-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px}
+.auth-inp{width:100%;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;color:var(--t0);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none}
+.auth-inp:focus{border-color:var(--ac)}
+.auth-inp::placeholder{color:var(--t3)}
+.auth-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;font-family:'Syne',sans-serif}
+.auth-btn:hover{filter:brightness(1.1)}
+.auth-err{color:var(--red);font-size:12px;margin-top:8px;display:none}
+.auth-room-info{background:var(--bg3);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--t3);font-size:11px}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--bd)}
+
+/* Live Preview */
+.preview-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.preview-bar{height:32px;background:var(--bg2);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0}
+.preview-url{flex:1;background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:3px 8px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--t2)}
+.preview-frame{flex:1;border:none;background:#fff}
+
+/* Keyboard shortcuts tooltip */
+.shortcuts-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center}
+.shortcuts-modal.open{display:flex}
+.shortcuts-card{background:var(--bg2);border:1px solid var(--bd2);border-radius:12px;padding:24px;width:460px}
+.sc-title{font-size:16px;font-weight:800;margin-bottom:16px}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sc-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)}
+.sc-key{background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:2px 7px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--t1);white-space:nowrap}
+.sc-desc{font-size:12px;color:var(--t2)}
+
+/* Stats */
+.stats-row{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap}
+.stat-chip{background:var(--bg3);border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--t1);display:flex;align-items:center;gap:5px}
+.stat-val{color:var(--ac);font-weight:700}
+
+/* Mobile */
+@media(max-width:768px){
+  .sidebar{display:none}
+  .side-panel{width:100%;position:fixed;bottom:0;left:0;right:0;height:50vh;border-top:2px solid var(--bd);border-left:none;z-index:100;transform:translateY(100%);transition:transform .3s}
+  .side-panel.open{transform:translateY(0)}
+  .mobile-bar{display:flex!important}
+  header{padding:0 10px;gap:8px}
+  .logo{font-size:14px}
+  .hdr-right .btn-ghost{display:none}
+  .avs{display:none}
+  .toolbar span{display:none}
+  .code-wrap{font-size:12px}
+}
+@media(min-width:769px){
+  .mobile-bar{display:none!important}
+}
+.mobile-bar{display:none;position:fixed;bottom:0;left:0;right:0;height:52px;background:var(--bg1);border-top:1px solid var(--bd);z-index:99;align-items:center;justify-content:space-around;padding:0 8px}
+.mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;cursor:pointer;color:var(--t2);font-size:10px;font-weight:600;border-radius:6px}
+.mob-btn:hover,.mob-btn.active{color:var(--ac);background:var(--bg3)}
+.mob-btn-icon{font-size:18px}
+
+/* Syntax highlight colors overlay — layered over textarea */
+.syntax-colors{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:22px;padding:14px 14px 14px 62px;white-space:pre;overflow:hidden;color:transparent}
+
+/* Notification */
+.notif{position:fixed;top:62px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;color:var(--t0);z-index:999;display:none;animation:slidein .2s ease-out}
+.notif.show{display:block}
+
+/* ═══════════════ PHASE 3 STYLES ═══════════════ */
+
+/* AI Panel */
+.ai-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.ai-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.ai-msgs::-webkit-scrollbar{width:4px}
+.ai-msgs::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+.ai-msg{display:flex;gap:8px;align-items:flex-start}
+.ai-msg.user{flex-direction:row-reverse}
+.ai-av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0}
+.ai-av.bot{background:linear-gradient(135deg,var(--ac),var(--ac2))}
+.ai-av.usr{background:var(--bg4);border:1px solid var(--bd)}
+.ai-bubble{max-width:88%;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.6;word-break:break-word}
+.ai-bubble.bot{background:var(--bg3);border:1px solid var(--bd);color:var(--t0)}
+.ai-bubble.usr{background:var(--ac);color:#fff}
+.ai-bubble pre{background:var(--bg0);border:1px solid var(--bd);border-radius:4px;padding:8px;margin:6px 0;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:11px}
+.ai-bubble code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg0);padding:1px 4px;border-radius:3px}
+.ai-footer{padding:8px 12px;border-top:1px solid var(--bd);display:flex;gap:6px;flex-shrink:0}
+.ai-input{flex:1;background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:7px 10px;color:var(--t0);font-size:12px;font-family:'Syne',sans-serif;outline:none;resize:none;max-height:80px}
+.ai-input:focus{border-color:var(--ac2)}
+.ai-send{width:30px;height:30px;background:linear-gradient(135deg,var(--ac),var(--ac2));border:none;border-radius:4px;cursor:pointer;color:#fff;font-size:14px;flex-shrink:0}
+.ai-send:hover{filter:brightness(1.1)}
+.ai-send:disabled{opacity:.4;cursor:not-allowed}
+.ai-actions{padding:6px 12px;border-bottom:1px solid var(--bd);display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0}
+.ai-chip{padding:3px 8px;border-radius:12px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--bd);background:var(--bg3);color:var(--t1);white-space:nowrap}
+.ai-chip:hover{background:var(--bg4);border-color:var(--ac);color:var(--t0)}
+.ai-thinking{display:flex;align-items:center;gap:6px;color:var(--t2);font-size:11px;font-style:italic;padding:4px 0}
+.ai-tdot{width:5px;height:5px;border-radius:50%;background:var(--ac2);animation:bounce .8s infinite}
+.ai-tdot:nth-child(2){animation-delay:.15s}.ai-tdot:nth-child(3){animation-delay:.3s}
+
+/* History Panel */
+.hist-wrap{flex:1;overflow-y:auto;padding:0}
+.hist-wrap::-webkit-scrollbar{width:4px}
+.hist-wrap::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+.hist-item{padding:10px 14px;border-bottom:1px solid var(--bd);cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .1s}
+.hist-item:hover{background:var(--bg3)}
+.hist-item.current{background:rgba(91,138,255,.1);border-left:3px solid var(--ac)}
+.hist-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.hist-info{flex:1;min-width:0}
+.hist-ver{font-size:11px;font-weight:700;color:var(--t0)}
+.hist-meta{font-size:10px;color:var(--t2);font-family:'JetBrains Mono',monospace;margin-top:1px}
+.hist-restore{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg4);border:1px solid var(--bd);color:var(--t1);cursor:pointer;white-space:nowrap}
+.hist-restore:hover{background:var(--ac);color:#fff;border-color:var(--ac)}
+.hist-empty{padding:24px;text-align:center;color:var(--t2);font-size:12px}
+
+/* Export modal */
+.exp-opts{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.exp-opt{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;border:1px solid var(--bd);cursor:pointer;background:var(--bg3)}
+.exp-opt:hover{border-color:var(--ac);background:var(--bg4)}
+.exp-opt-icon{font-size:20px}
+.exp-opt-name{font-size:13px;font-weight:700}
+.exp-opt-desc{font-size:11px;color:var(--t2)}
+
+/* Toolbar additions */
+.btn-ai{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;font-weight:700}
+.btn-ai:hover{filter:brightness(1.1);box-shadow:0 4px 16px rgba(91,138,255,.35)}
+.btn-export{background:transparent;color:var(--t1);border:1px solid var(--bd)}
+.btn-export:hover{background:var(--bg3);color:var(--t0)}
+
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes slidein{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-icon">⚡</div>Code<b>Sync</b><sup style="font-size:9px;color:var(--t2);font-weight:400;margin-left:2px">v4</sup></div>
+  <div id="conn-pill" class="pill wait"><div class="dot"></div><span id="conn-lbl">Connecting...</span></div>
+  <div class="room-badge" onclick="openModal()">Room:&nbsp;<span class="room-id" id="room-disp">-</span>&nbsp;·&nbsp;<span id="user-cnt">0</span> online</div>
+  <div class="hdr-right">
+    <div class="avs" id="avs"></div>
+    <button class="btn btn-ghost" onclick="openExport()">📦 Export</button>
+    <button class="btn btn-ghost" onclick="openModal()">🔗 Invite</button>
+    <button class="btn btn-ai" onclick="swPanel('ai',document.getElementById('ptab-ai'))">✨ AI</button>
+    <button class="btn btn-run" id="run-btn" onclick="runCode()">▶ Run</button>
+  </div>
+</header>
+
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo"><div class="auth-logo-icon">⚡</div>Code<b style="color:var(--ac)">Sync</b></div>
+    <div class="auth-sub">Real-time collaborative code editor</div>
+    <div class="auth-room-info">🔐 <span>Room: <b id="auth-room-name">-</b></span></div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="atab-join" onclick="authTab('join')">Join Room</div>
+      <div class="auth-tab" id="atab-create" onclick="authTab('create')">Create Room</div>
+    </div>
+    <div id="auth-join">
+      <div class="auth-field">
+        <label class="auth-label">Your Name</label>
+        <input class="auth-inp" id="auth-name" placeholder="Enter display name" maxlength="24"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Room Password <span style="color:var(--t3)">(if protected)</span></label>
+        <input class="auth-inp" id="auth-pass" type="password" placeholder="Leave blank if no password"/>
+      </div>
+      <button class="auth-btn" onclick="authJoin()">Join Room →</button>
+    </div>
+    <div id="auth-create" style="display:none">
+      <div class="auth-field">
+        <label class="auth-label">Your Name</label>
+        <input class="auth-inp" id="auth-name2" placeholder="Enter display name" maxlength="24"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Set Room Password <span style="color:var(--t3)">(optional)</span></label>
+        <input class="auth-inp" id="auth-newpass" type="password" placeholder="Leave blank for open room"/>
+      </div>
+      <button class="auth-btn" onclick="authCreate()">Create & Enter →</button>
+    </div>
+    <div class="auth-err" id="auth-err"></div>
+  </div>
+</div>
+
+<!-- SHORTCUTS MODAL -->
+<div class="shortcuts-modal" id="shortcuts-modal">
+  <div class="shortcuts-card">
+    <div class="sc-title">⌨️ Keyboard Shortcuts</div>
+    <div class="sc-grid">
+      <div class="sc-row"><span class="sc-key">Ctrl+Enter</span><span class="sc-desc">Run code</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+S</span><span class="sc-desc">Save snapshot</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+/</span><span class="sc-desc">Toggle comment</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+D</span><span class="sc-desc">Duplicate line</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+Z</span><span class="sc-desc">Undo</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+Shift+K</span><span class="sc-desc">Delete line</span></div>
+      <div class="sc-row"><span class="sc-key">Tab</span><span class="sc-desc">Indent 2 spaces</span></div>
+      <div class="sc-row"><span class="sc-key">Shift+Tab</span><span class="sc-desc">Unindent</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+A</span><span class="sc-desc">Select all</span></div>
+      <div class="sc-row"><span class="sc-key">Ctrl+?</span><span class="sc-desc">Show shortcuts</span></div>
+    </div>
+    <div style="text-align:right;margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('shortcuts-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="notif" class="notif"></div>
+
+<div class="workspace">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-sec">
+      <div class="sb-lbl">Files</div>
+      <div class="file-item active" onclick="swFile('main.js',this)">📄 main.js</div>
+      <div class="file-item" onclick="swFile('styles.css',this)">🎨 styles.css</div>
+      <div class="file-item" onclick="swFile('index.html',this)">🌐 index.html</div>
+    </div>
+    <div class="divider"></div>
+    <div class="sb-sec" style="flex:0 0 auto"><div class="sb-lbl">Live Collaborators</div></div>
+    <div class="collab-list" id="collab-list"></div>
+  </div>
+
+  <!-- EDITOR AREA -->
+  <div class="editor-area">
+    <div class="tabs" id="tabs">
+      <div class="tab active" id="tab-main.js"><div class="tab-dot" style="background:#f7df1e"></div>main.js</div>
+    </div>
+    <div class="toolbar">
+      <select class="lang-sel" id="lang-sel" onchange="onLangChange(this.value)">
+        <option value="javascript">JavaScript</option>
+        <option value="typescript">TypeScript</option>
+        <option value="python">Python</option>
+        <option value="java">Java</option>
+        <option value="cpp">C++</option>
+        <option value="rust">Rust</option>
+        <option value="go">Go</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+      </select>
+      <div class="tb-div"></div>
+      <span style="font-size:11px;color:var(--t2);font-family:'JetBrains Mono',monospace">Tab = 2 spaces &nbsp;|&nbsp; Ctrl+A = select all</span>
+      <button class="tbtn" title="Keyboard shortcuts (Ctrl+?)" onclick="document.getElementById('shortcuts-modal').classList.add('open')" style="font-size:11px;width:auto;padding:0 6px">⌨️</button>
+      <div class="ot-badge ot-ok" id="ot-badge">✓ SYNCED</div>
+    </div>
+
+    <div class="editor-split">
+      <!-- PLAIN TEXTAREA EDITOR — no framework, no bugs -->
+      <div class="code-wrap">
+        <div class="line-nums" id="line-nums">1</div>
+        <textarea class="code-editor" id="code-editor"
+          spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          placeholder="// Start typing your code here..."></textarea>
+      </div>
+
+      <!-- SIDE PANEL -->
+      <div class="side-panel">
+        <div class="panel-tabs">
+          <div class="ptab active" id="ptab-out" onclick="swPanel('out',this)">OUTPUT</div>
+          <div class="ptab" id="ptab-preview" onclick="swPanel('preview',this)">👁 PREVIEW</div>
+          <div class="ptab" id="ptab-chat" onclick="swPanel('chat',this)">CHAT <span class="p-badge" id="chat-badge" style="display:none">0</span></div>
+          <div class="ptab" id="ptab-ai" onclick="swPanel('ai',this)">✨ AI</div>
+          <div class="ptab" id="ptab-hist" onclick="swPanel('hist',this)">HISTORY</div>
+          <div class="ptab" id="ptab-log" onclick="swPanel('log',this)">LOG</div>
+        </div>
+        <div id="panel-out" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+          <div class="stats-row" id="stats-row">
+            <div class="stat-chip">Lines: <span class="stat-val" id="stat-lines">0</span></div>
+            <div class="stat-chip">Chars: <span class="stat-val" id="stat-chars">0</span></div>
+            <div class="stat-chip">Version: <span class="stat-val" id="stat-ver">0</span></div>
+            <div class="stat-chip">Users: <span class="stat-val" id="stat-users">1</span></div>
+          </div>
+          <div class="out-body" id="out-content">
+          <div class="o-dim">$ Ready to run</div>
+          <div class="o-dim">&nbsp; Press ▶ Run to execute your code</div>
+          </div>
+        </div>
+        <div id="panel-chat" class="chat-wrap" style="display:none">
+          <div class="chat-msgs" id="chat-msgs"></div>
+          <div class="typing-row" id="typing-row"></div>
+          <div class="chat-footer">
+            <input class="chat-input" id="chat-input" placeholder="Message teammates..."/>
+            <button class="chat-send" onclick="sendChat()">➤</button>
+          </div>
+        </div>
+        <div id="panel-log" class="log-body" style="display:none">
+          <div class="o-info" style="margin-bottom:8px">Operational Transformation Log</div>
+          <div id="log-entries"></div>
+        </div>
+
+        <!-- LIVE PREVIEW PANEL -->
+        <div id="panel-preview" class="preview-wrap" style="display:none">
+          <div class="preview-bar">
+            <span style="font-size:11px;color:var(--t2)">Live Preview</span>
+            <div class="preview-url" id="preview-url">about:blank</div>
+            <button style="padding:2px 8px;background:var(--bg4);border:1px solid var(--bd);border-radius:4px;color:var(--t1);font-size:11px;cursor:pointer" onclick="refreshPreview()">↻</button>
+          </div>
+          <iframe class="preview-frame" id="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+
+        <!-- AI ASSISTANT PANEL -->
+        <div id="panel-ai" class="ai-wrap" style="display:none">
+          <div class="ai-actions">
+            <div class="ai-chip" onclick="aiQuick('explain')">💡 Explain</div>
+            <div class="ai-chip" onclick="aiQuick('fix')">🔧 Fix bugs</div>
+            <div class="ai-chip" onclick="aiQuick('optimize')">⚡ Optimize</div>
+            <div class="ai-chip" onclick="aiQuick('comment')">📝 Add comments</div>
+            <div class="ai-chip" onclick="aiQuick('test')">🧪 Write tests</div>
+            <div class="ai-chip" onclick="aiQuick('convert')">🔄 Convert language</div>
+            <div class="ai-chip" style="border-color:var(--yel);color:var(--yel)" onclick="setApiKey()">⚙ Set API Key</div>
+          </div>
+          <div class="ai-msgs" id="ai-msgs">
+            <div style="padding:24px 12px;text-align:center;color:var(--t2);font-size:12px">
+              <div style="font-size:28px;margin-bottom:8px">✨</div>
+              <div style="font-weight:700;color:var(--t1);margin-bottom:4px">AI Code Assistant</div>
+              <div>Ask anything about your code, or use the quick actions above</div>
+            </div>
+          </div>
+          <div class="ai-footer">
+            <textarea class="ai-input" id="ai-input" rows="1" placeholder="Ask AI about your code..."></textarea>
+            <button class="ai-send" id="ai-send-btn" onclick="sendAI()">➤</button>
+          </div>
+        </div>
+
+        <!-- HISTORY PANEL -->
+        <div id="panel-hist" style="display:none;flex:1;overflow:hidden;display:none;flex-direction:column">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--bd);font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+            <span>Version history</span>
+            <button class="hist-restore" onclick="clearHistory()" style="font-size:9px">Clear</button>
+          </div>
+          <div class="hist-wrap" id="hist-list">
+            <div class="hist-empty">No history yet.<br>Start editing to record versions.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE NAV BAR -->
+<div class="mobile-bar" id="mobile-bar">
+  <div class="mob-btn active" id="mob-editor" onclick="mobNav('editor')"><div class="mob-btn-icon">📝</div>Editor</div>
+  <div class="mob-btn" id="mob-preview" onclick="mobNav('preview')"><div class="mob-btn-icon">👁</div>Preview</div>
+  <div class="mob-btn" id="mob-chat" onclick="mobNav('chat')"><div class="mob-btn-icon">💬</div>Chat</div>
+  <div class="mob-btn" id="mob-run" onclick="runCode()"><div class="mob-btn-icon">▶</div>Run</div>
+  <div class="mob-btn" id="mob-ai" onclick="mobNav('ai')"><div class="mob-btn-icon">✨</div>AI</div>
+</div>
+
+<div class="status-bar">
+  <div class="s-item">⚡ CodeSync</div><div class="s-sep">|</div>
+  <div class="s-item" id="s-conn">● Connecting</div><div class="s-sep">|</div>
+  <div class="s-item" id="s-lang">JavaScript</div><div class="s-sep">|</div>
+  <div class="s-item" id="s-pos">Ln 1, Col 1</div>
+  <div class="s-right">
+    <div class="s-item" id="s-pending">0 pending</div><div class="s-sep">|</div>
+    <div class="s-item">UTF-8</div>
+    <div class="s-item" id="s-users">0 users</div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-title">🔗 Invite Collaborators</div>
+    <div class="modal-sub">Share this link to collaborate in real-time</div>
+    <label class="modal-label">Room Link</label>
+    <div class="modal-row" style="margin-bottom:12px">
+      <input class="modal-inp" id="share-url" readonly style="margin-bottom:0;flex:1"/>
+      <button class="btn btn-primary" onclick="copyLink()">Copy</button>
+    </div>
+    <label class="modal-label">Your Name</label>
+    <input class="modal-inp" id="my-name" placeholder="Display name"/>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-primary" onclick="applyName()">Save</button>
+    </div>
+  </div>
+</div>
+<!-- EXPORT MODAL -->
+<div class="modal-bg" id="export-modal">
+  <div class="modal">
+    <div class="modal-title">📦 Export Code</div>
+    <div class="modal-sub">Download your code in any format</div>
+    <div class="exp-opts">
+      <div class="exp-opt" onclick="exportAs('js')"><span class="exp-opt-icon">📄</span><div><div class="exp-opt-name">JavaScript (.js)</div><div class="exp-opt-desc">Raw JS file</div></div></div>
+      <div class="exp-opt" onclick="exportAs('html')"><span class="exp-opt-icon">🌐</span><div><div class="exp-opt-name">HTML Page (.html)</div><div class="exp-opt-desc">Wrap code in HTML boilerplate</div></div></div>
+      <div class="exp-opt" onclick="exportAs('txt')"><span class="exp-opt-icon">📝</span><div><div class="exp-opt-name">Plain Text (.txt)</div><div class="exp-opt-desc">Simple text file</div></div></div>
+      <div class="exp-opt" onclick="exportAs('json')"><span class="exp-opt-icon">📊</span><div><div class="exp-opt-name">JSON Snapshot (.json)</div><div class="exp-opt-desc">Code + metadata + version history</div></div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeExport()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  CodeSync Phase 2 — Textarea OT Engine
+//  Simple, reliable, no framework conflicts
+// ════════════════════════════════════════════════════
+
+var COLORS = ['#5b8aff','#a78bfa','#34d399','#f87171','#fbbf24','#f472b6','#38bdf8'];
+
+// ── State ────────────────────────────────────────────
+var socket = null;
+var sver = 0, cver = 0;
+var pending = [];
+var buf = null;
+var suppress = false;
+var synced = false;
+var lastDoc = '';
+
+// ── User ─────────────────────────────────────────────
+var roomId = getRoom();
+var myId = localStorage.getItem('uid') || crypto.randomUUID();
+var myName = localStorage.getItem('uname') || ('User-' + (Math.random()*9999|0));
+var myColor = COLORS[Math.random()*COLORS.length|0];
+localStorage.setItem('uid', myId);
+
+var peers = new Map();
+var chatUnread = 0, chatOpen = false;
+
+// Load API key immediately
+window.ANTHROPIC_API_KEY = localStorage.getItem('anthropic_key') || '';
+
+function getRoom() {
+  var id = new URLSearchParams(location.search).get('room');
+  if (!id) {
+    var w = ['frost','ember','storm','nova','pixel','delta','swift','lunar'];
+    id = w[Math.random()*8|0]+'-'+w[Math.random()*8|0]+'-'+(Math.random()*10|0);
+    var u = new URL(location.href); u.searchParams.set('room', id);
+    history.replaceState({}, '', u);
+  }
+  return id;
+}
+
+// ── Get textarea ──────────────────────────────────────
+function getTA() { return document.getElementById('code-editor'); }
+
+// ── OT: diff ─────────────────────────────────────────
+function mkDiff(a, b) {
+  // Find common prefix
+  var p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  // Find common suffix (only after prefix)
+  var s = 0;
+  var maxS = Math.min(a.length - p, b.length - p);
+  while (s < maxS && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  // Build ops
+  var ops = [];
+  if (p > 0) ops.push({t:'R', n:p});
+  var delLen = a.length - p - s;
+  if (delLen > 0) ops.push({t:'D', n:delLen});
+  var insStr = b.slice(p, b.length - s);
+  if (insStr.length > 0) ops.push({t:'I', s:insStr, n:insStr.length});
+  if (s > 0) ops.push({t:'R', n:s});
+  // Verify
+  if (ops.length === 0 && a !== b) ops.push({t:'D', n:a.length}, {t:'I', s:b, n:b.length});
+  return {ops:ops, bl:a.length, tl:b.length};
+}
+
+// ── OT: apply ────────────────────────────────────────
+function applyDiff(doc, ops) {
+  var r = '', i = 0;
+  for (var k=0; k<ops.length; k++) {
+    var o = ops[k];
+    if (o.t==='R') { r += doc.slice(i, i+o.n); i+=o.n; }
+    else if (o.t==='I') { r += o.s; }
+    else if (o.t==='D') { i+=o.n; }
+  }
+  return r;
+}
+
+// ── OT: transform ────────────────────────────────────
+function xform(A, B) {
+  var a1=[], b1=[], ia=0, ib=0, ra=0, rb=0, oa=null, ob=null;
+  var na=function(){if(ra>0)return;oa=ia<A.ops.length?Object.assign({},A.ops[ia++]):null;ra=oa?oa.n:0;};
+  var nb=function(){if(rb>0)return;ob=ib<B.ops.length?Object.assign({},B.ops[ib++]):null;rb=ob?ob.n:0;};
+  na(); nb();
+  while(oa||ob){
+    if(oa&&oa.t==='I'){a1.push({t:'I',s:oa.s,n:oa.n});b1.push({t:'R',n:oa.n});ra=0;na();continue;}
+    if(ob&&ob.t==='I'){a1.push({t:'R',n:ob.n});b1.push({t:'I',s:ob.s,n:ob.n});rb=0;nb();continue;}
+    if(!oa||!ob)break;
+    var n=Math.min(ra,rb);
+    if(oa.t==='R'&&ob.t==='R'){a1.push({t:'R',n:n});b1.push({t:'R',n:n});}
+    else if(oa.t==='D'&&ob.t==='R'){a1.push({t:'D',n:n});}
+    else if(oa.t==='R'&&ob.t==='D'){b1.push({t:'D',n:n});}
+    ra-=n;rb-=n;
+    if(ra===0)na();if(rb===0)nb();
+  }
+  var tl=function(ops){return ops.reduce(function(s,o){return s+(o.t==='R'||o.t==='I'?o.n:0);},0);};
+  return [{ops:a1,bl:B.tl,tl:tl(a1)},{ops:b1,bl:A.tl,tl:tl(b1)}];
+}
+
+// ── Apply remote op to textarea ──────────────────────
+// THIS IS THE KEY: we save/restore cursor manually
+function applyRemote(op) {
+  var ta = getTA();
+  var curDoc = ta.value;
+  var selStart = ta.selectionStart;
+  var selEnd = ta.selectionEnd;
+
+  // If doc length doesn't match op base length, request full sync
+  if (curDoc.length !== op.bl) {
+    if (socket) socket.emit('request-sync', {roomId:roomId});
+    return;
+  }
+
+  // Apply op to get new document
+  var newDoc;
+  try { newDoc = applyDiff(curDoc, op.ops); }
+  catch(e) {
+    console.warn('applyRemote failed:', e.message);
+    if (socket) socket.emit('request-sync', {roomId:roomId});
+    return;
+  }
+
+  if (newDoc === curDoc) return; // nothing changed
+
+  // Adjust cursor positions based on what changed
+  var newStart = adjustCursor(selStart, op.ops);
+  var newEnd = adjustCursor(selEnd, op.ops);
+
+  // Set value WITHOUT triggering our input handler
+  suppress = true;
+  ta.value = newDoc;
+  ta.setSelectionRange(newStart, newEnd);
+  lastDoc = newDoc; // MUST update before suppress=false
+  suppress = false;
+
+  updateLineNums();
+}
+
+// Shift a cursor offset through a set of ops
+function adjustCursor(pos, ops) {
+  var offset = 0, newPos = pos;
+  for (var i=0; i<ops.length; i++) {
+    var o = ops[i];
+    if (o.t==='R') { offset+=o.n; }
+    else if (o.t==='I') {
+      if (offset <= pos) newPos += o.n;
+    }
+    else if (o.t==='D') {
+      var end = offset + o.n;
+      if (end <= pos) { newPos -= o.n; }
+      else if (offset < pos) { newPos = offset; }
+      offset += o.n;
+    }
+    if (offset > pos) break;
+  }
+  return Math.max(0, newPos);
+}
+
+// ── Send op ───────────────────────────────────────────
+function sendOp(op) {
+  if (!socket || !socket.connected || !synced) return;
+  pending.push(op);
+  updSync();
+  addLog('send', 'op v'+cver+' ('+op.ops.length+' parts)');
+  socket.emit('operation', {roomId:roomId, ops:op.ops, bl:op.bl, tl:op.tl, clientVersion:cver});
+  cver = sver;
+}
+
+// ── Socket ────────────────────────────────────────────
+function connect() {
+  setConn('wait');
+  socket = io(window.location.origin, {
+    timeout:5000, reconnectionAttempts:5,
+    transports:['websocket','polling']
+  });
+
+  socket.on('connect', function() {
+    setConn('ok');
+    console.log('[CONNECT] socket id:', socket.id, 'room:', roomId);
+    socket.emit('join-room', {roomId:roomId, userId:myId, username:myName, color:myColor});
+    console.log('[JOIN] emitted join-room for', roomId);
+  });
+
+  socket.on('connect_error', function() { setConn('no'); demoMode(); });
+  socket.on('disconnect', function(r) { setConn('no'); toast('⚠️','Disconnected',r); });
+  socket.on('reconnect', function() {
+    setConn('ok'); toast('✓','Reconnected','');
+    socket.emit('request-sync', {roomId:roomId});
+  });
+
+  socket.on('room-state', function(d) {
+    sver=d.version; cver=d.version; pending=[]; buf=null;
+    // Set textarea to server document
+    suppress=true;
+    getTA().value = d.document||'';
+    suppress=false;
+    lastDoc = d.document||'';
+    synced = true;
+    setLang(d.language||'javascript');
+    updVer(); updateLineNums();
+
+    peers.clear();
+    d.users.forEach(function(u){
+      if(u.userId!==myId) peers.set(u.userId,Object.assign({},u,{isTyping:false}));
+    });
+    updUI();
+    updStats();
+    toast('🚀','Joined!',d.users.length+' user'+(d.users.length!==1?'s':'')+' online');
+    addLog('info','Joined v'+d.version+' — '+d.users.length+' users');
+  });
+
+  socket.on('full-sync', function(d) {
+    sver=d.version; cver=d.version; pending=[]; buf=null;
+    suppress=true; getTA().value=d.document; suppress=false;
+    lastDoc=d.document; synced=true;
+    updVer(); updateLineNums();
+    addLog('sync','full-sync v'+d.version);
+  });
+
+  socket.on('ack', function(d) {
+    sver=d.version; cver=d.version; pending.shift();
+    addLog('ack','ack v'+d.version);
+    // Re-sync lastDoc to actual textarea content on ack
+    lastDoc = getTA().value;
+    if(buf){var b=buf;buf=null;sendOp(b);}
+    updSync(); updVer();
+  });
+
+  socket.on('remote-operation', function(d) {
+    var remOp={ops:d.ops,bl:d.bl,tl:d.tl};
+    addLog('recv',d.username+' op v'+d.version);
+    // Transform against pending
+    var np=[];
+    for(var i=0;i<pending.length;i++){
+      var r=xform(pending[i],remOp);np.push(r[0]);remOp=r[1];
+    }
+    pending=np;
+    if(buf){var rb=xform(buf,remOp);buf=rb[0];remOp=rb[1];}
+    applyRemote(remOp);
+    sver=d.version; cver=d.version; updVer();
+  });
+
+  socket.on('user-joined', function(u) {
+    if(u.userId===myId)return;
+    peers.set(u.userId,Object.assign({},u,{isTyping:false}));
+    updUI(); updStats();
+    document.getElementById('user-cnt').textContent = peers.size + 1;
+    toast('👋',u.username+' joined','');
+    sendNotif(u.username+' joined', 'Room: '+roomId);
+    showNotif('👋 '+u.username+' joined the room');
+    addLog('join',u.username+' joined');
+  });
+
+  socket.on('user-left', function(d) {
+    peers.delete(d.userId); updUI();
+    document.getElementById('user-cnt').textContent = peers.size + 1;
+    toast('👋',d.username+' left','');
+    addLog('leave',d.username+' left');
+  });
+
+
+
+  socket.on('user-typing', function(d) {
+    var u=peers.get(d.userId); if(u) u.isTyping=d.isTyping; updTyping();
+  });
+
+  socket.on('language-changed', function(d) {
+    setLang(d.language); toast('🔤','Language: '+d.language,'by '+d.changedBy);
+  });
+
+  socket.on('chat-message', function(m) {
+    addChatMsg(m); if(!chatOpen){chatUnread++;updBadge();}
+  });
+}
+
+// ── Textarea input handling ───────────────────────────
+var typTimer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+  var ta = getTA();
+
+  // Handle Tab key → insert 2 spaces
+  ta.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = ta.selectionStart, end = ta.selectionEnd;
+      var v = ta.value;
+      ta.value = v.slice(0,s) + '  ' + v.slice(end);
+      ta.selectionStart = ta.selectionEnd = s+2;
+      // Manually trigger input event
+      ta.dispatchEvent(new Event('input'));
+    }
+  });
+
+  ta.addEventListener('input', function() {
+    if (suppress) return;
+    if (!synced) return;
+
+    var newDoc = ta.value;
+    if (newDoc === lastDoc) return; // no real change
+    var op = mkDiff(lastDoc, newDoc);
+    lastDoc = newDoc; // update immediately before anything async
+
+    if (op.ops.length === 0) return;
+
+    if (pending.length > 0) {
+      buf = buf ? {ops:buf.ops.concat(op.ops),bl:buf.bl,tl:op.tl} : op;
+    } else {
+      sendOp(op);
+    }
+    updSync();
+    updateLineNums();
+    updateCursorPos();
+
+    if (socket && socket.connected) {
+      socket.emit('typing-start', {roomId:roomId});
+      clearTimeout(typTimer);
+      typTimer = setTimeout(function(){
+        if(socket) socket.emit('typing-stop',{roomId:roomId});
+      }, 1500);
+    }
+  });
+
+  ta.addEventListener('click', updateCursorPos);
+  ta.addEventListener('keyup', updateCursorPos);
+  ta.addEventListener('scroll', syncLineNumScroll);
+
+  // Show auth screen first
+  authInit();
+});
+
+// ── Line numbers ──────────────────────────────────────
+function updateLineNums() {
+  var ta = getTA();
+  var lines = ta.value.split('\n').length;
+  var nums = [];
+  for (var i=1; i<=lines; i++) nums.push(i);
+  document.getElementById('line-nums').textContent = nums.join('\n');
+}
+
+function syncLineNumScroll() {
+  document.getElementById('line-nums').scrollTop = getTA().scrollTop;
+}
+
+// ── Cursor position ───────────────────────────────────
+function updateCursorPos() {
+  var ta = getTA();
+  var pos = ta.selectionStart;
+  var text = ta.value.slice(0, pos);
+  var lines = text.split('\n');
+  var ln = lines.length;
+  var col = lines[lines.length-1].length + 1;
+  document.getElementById('s-pos').textContent = 'Ln '+ln+', Col '+col;
+  // Cursor move to server
+  if (socket && socket.connected) {
+    socket.emit('cursor-move', {roomId:roomId, cursor:{line:ln,column:col,offset:pos}});
+  }
+}
+
+// ── UI ────────────────────────────────────────────────
+function updUI() {
+  var us = Array.from(peers.values()), tot = us.length+1;
+  document.getElementById('user-cnt').textContent = tot;
+  document.getElementById('s-users').textContent = tot+' user'+(tot!==1?'s':'');
+  document.getElementById('avs').innerHTML =
+    '<div class="av" style="background:'+myColor+';margin-left:0">'+myName[0].toUpperCase()+'<div class="av-tip">You ('+myName+')</div></div>'+
+    us.map(function(u){return '<div class="av" style="background:'+u.color+'">'+u.username[0].toUpperCase()+'<div class="av-tip">'+u.username+'</div></div>';}).join('');
+  document.getElementById('collab-list').innerHTML =
+    '<div class="cu"><div class="cu-av" style="background:'+myColor+'">'+myName[0].toUpperCase()+'</div>'+
+    '<div><div class="cu-name">'+myName+' <span style="color:var(--t2)">(you)</span></div></div></div>'+
+    us.map(function(u){return '<div class="cu"><div class="cu-av" style="background:'+u.color+'">'+u.username[0].toUpperCase()+'</div>'+
+      '<div><div class="cu-name">'+u.username+'</div><div class="cu-status">'+(u.isTyping?'✏️ typing...':'online')+'</div></div></div>';}).join('');
+}
+
+function updTyping() {
+  var t=Array.from(peers.values()).filter(function(u){return u.isTyping;}).map(function(u){return u.username;});
+  var el=document.getElementById('typing-row');
+  if(!t.length){el.innerHTML='';return;}
+  var nm=t.length<=2?t.join(', '):t[0]+' & '+(t.length-1)+' others';
+  el.innerHTML='<div class="tdots"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>'+nm+' typing...';
+  updUI();
+}
+
+function updSync() {
+  var n=pending.length+(buf?1:0);
+  var b=document.getElementById('ot-badge');
+  document.getElementById('s-pending').textContent=n+' pending';
+  if(n===0){b.className='ot-badge ot-ok';b.textContent='✓ SYNCED';}
+  else{b.className='ot-badge ot-pending';b.textContent=n+' PENDING';}
+}
+
+function updVer() {}
+
+function setConn(s) {
+  var p=document.getElementById('conn-pill'),l=document.getElementById('conn-lbl'),c=document.getElementById('s-conn');
+  p.className='pill '+s;
+  var L={wait:'Connecting...',ok:'Connected',no:'Disconnected'};
+  l.textContent=L[s]; c.textContent='● '+(L[s]||s);
+}
+
+function setLang(lg) {
+  document.getElementById('lang-sel').value=lg;
+  document.getElementById('s-lang').textContent=lg[0].toUpperCase()+lg.slice(1);
+}
+
+function onLangChange(lg) {
+  setLang(lg);
+  if(socket) socket.emit('change-language',{roomId:roomId,language:lg});
+  getTA().focus();
+}
+
+// ── Panel switcher ────────────────────────────────────
+function swPanel(p, el) {
+  document.querySelectorAll('.ptab').forEach(function(t){t.classList.remove('active');});
+  if(el) el.classList.add('active');
+  document.getElementById('panel-out').style.display = p==='out'?'flex':'none';
+  document.getElementById('panel-preview').style.display = p==='preview'?'flex':'none';
+  document.getElementById('panel-chat').style.display = p==='chat'?'flex':'none';
+  document.getElementById('panel-log').style.display = p==='log'?'block':'none';
+  document.getElementById('panel-ai').style.display = p==='ai'?'flex':'none';
+  var ph = document.getElementById('panel-hist');
+  ph.style.display = p==='hist'?'flex':'none';
+  if(p==='hist') ph.style.flexDirection='column';
+  if(p==='chat'){chatOpen=true;chatUnread=0;updBadge();setTimeout(function(){document.getElementById('chat-input').focus();},50);}
+  else if(p==='ai'){setTimeout(function(){document.getElementById('ai-input').focus();},50);}
+  else if(p==='preview'){refreshPreview();}
+  else{chatOpen=false;setTimeout(function(){getTA().focus();},50);}
+  if(p==='hist') renderHistory();
+}
+
+// ── Chat ──────────────────────────────────────────────
+function addChatMsg(m) {
+  var ms=document.getElementById('chat-msgs');
+  var tm=new Date(m.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  var d=document.createElement('div'); d.className='chat-msg';
+  d.innerHTML='<div class="chat-av" style="background:'+m.color+'">'+m.username[0].toUpperCase()+'</div>'+
+    '<div class="chat-body"><div class="chat-meta"><span class="chat-name" style="color:'+m.color+'">'+m.username+(m.userId===myId?' (you)':'')+'</span>'+
+    '<span class="chat-time">'+tm+'</span></div><div class="chat-text">'+esc(m.text)+'</div></div>';
+  ms.appendChild(d); ms.scrollTop=ms.scrollHeight;
+}
+
+function sendChat() {
+  var inp=document.getElementById('chat-input'),tx=inp.value.trim(); if(!tx)return; inp.value='';
+  if(socket&&socket.connected) socket.emit('chat-message',{roomId:roomId,text:tx});
+  else addChatMsg({userId:myId,username:myName,color:myColor,text:tx,timestamp:Date.now()});
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if(e.key==='Enter'){e.preventDefault();sendChat();}
+  });
+});
+
+function updBadge() {
+  var b=document.getElementById('chat-badge');
+  if(chatUnread>0){b.style.display='inline';b.textContent=chatUnread;}else b.style.display='none';
+}
+
+// ── Run Code ──────────────────────────────────────────
+async function runCode() {
+  var btn=document.getElementById('run-btn');
+  btn.disabled=true; btn.textContent='⏳ Running...';
+  var code=getTA().value;
+  var lang=document.getElementById('lang-sel').value;
+  var out=document.getElementById('panel-out');
+  swPanel('out',document.getElementById('ptab-out'));
+  out.innerHTML='<div class="o-dim">$ Executing '+lang+'...</div>';
+  await new Promise(function(r){setTimeout(r,200);});
+
+  // Save snapshot to history before running
+  saveSnapshot('run');
+
+  if(lang==='javascript'||lang==='typescript'){
+    var logs=[],ol=console.log,oe=console.error,ow=console.warn,oi=console.info;
+    console.log=function(){logs.push({t:'ok',m:Array.from(arguments).map(String).join(' ')});};
+    console.error=function(){logs.push({t:'err',m:Array.from(arguments).map(String).join(' ')});};
+    console.warn=function(){logs.push({t:'warn',m:Array.from(arguments).map(String).join(' ')});};
+    console.info=function(){logs.push({t:'info',m:Array.from(arguments).map(String).join(' ')});};
+    var t0=performance.now();
+    try{new Function(code)();}catch(e){logs.push({t:'err',m:e.toString()});}
+    var ms=(performance.now()-t0).toFixed(1);
+    console.log=ol;console.error=oe;console.warn=ow;console.info=oi;
+    var cm={ok:'o-ok',err:'o-err',warn:'o-warn',info:'o-info'},pm={ok:'→',err:'✗',warn:'⚠',info:'ℹ'};
+    out.innerHTML='<div class="o-dim">$ '+lang+' (sandbox) — '+new Date().toLocaleTimeString()+'</div>'+
+      (logs.length?logs.map(function(l){return'<div class="'+cm[l.t]+'">'+pm[l.t]+' '+esc(l.m)+'</div>';}).join(''):'<div class="o-ok">✓ No output</div>')+
+      '<div class="o-dim" style="margin-top:8px">Exited in '+ms+'ms</div>';
+  } else if(lang==='html'){
+    out.innerHTML='<div class="o-dim">$ Rendering HTML preview...</div>'+
+      '<iframe style="width:100%;height:calc(100% - 30px);border:none;border-radius:4px;background:#fff;margin-top:6px" srcdoc="'+code.replace(/"/g,'&quot;')+'"></iframe>';
+  } else {
+    out.innerHTML='<div class="o-dim">$ '+lang+' (server execution)</div>'+
+      '<div class="o-warn">⚠ '+lang+' requires server-side execution (Phase 4)</div>'+
+      '<div class="o-dim" style="margin-top:8px">JS and HTML run in browser sandbox.</div>';
+  }
+  btn.disabled=false; btn.textContent='▶ Run';
+  getTA().focus();
+}
+
+// ── File switcher ─────────────────────────────────────
+var FL={'main.js':'javascript','styles.css':'css','index.html':'html'};
+function swFile(f,el){
+  document.querySelectorAll('.file-item').forEach(function(x){x.classList.remove('active');});el.classList.add('active');
+  setLang(FL[f]||'javascript');
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  var t=document.getElementById('tab-'+f);
+  if(!t){t=document.createElement('div');t.id='tab-'+f;t.className='tab active';
+    t.innerHTML='<div class="tab-dot"></div>'+f;
+    t.onclick=function(){document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active');});t.classList.add('active');getTA().focus();};
+    document.getElementById('tabs').appendChild(t);}
+  else t.classList.add('active');
+  getTA().focus();
+}
+
+// ── Modal ─────────────────────────────────────────────
+function initUI(){
+  document.getElementById('room-disp').textContent=roomId;
+  document.getElementById('share-url').value=location.href;
+  document.getElementById('my-name').value=myName;
+  updateLineNums();
+  updStats();
+}
+function openModal(){document.getElementById('modal').classList.add('open');}
+function closeModal(){document.getElementById('modal').classList.remove('open');getTA().focus();}
+function copyLink(){navigator.clipboard.writeText(location.href);toast('📋','Copied!','');}
+function applyName(){
+  var n=document.getElementById('my-name').value.trim();if(!n)return;
+  myName=n;localStorage.setItem('uname',n);closeModal();updUI();toast('✓','Name: '+n,'');
+}
+document.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('modal').addEventListener('click',function(e){if(e.target.id==='modal')closeModal();});
+});
+
+// ── Toast ─────────────────────────────────────────────
+function toast(icon,title,sub,ms){
+  ms=ms||3000;
+  var c=document.getElementById('toasts'),t=document.createElement('div');t.className='toast';
+  t.innerHTML='<span class="toast-icon">'+icon+'</span><div><div class="toast-title">'+title+'</div>'+(sub?'<div class="toast-sub">'+esc(sub)+'</div>':'')+'</div>';
+  c.appendChild(t);setTimeout(function(){if(t.parentNode)t.remove();},ms);
+}
+
+// ── OT Log ────────────────────────────────────────────
+var LC={send:'#5b8aff',recv:'#a78bfa',ack:'#34d399',sync:'#fbbf24',info:'#6b7280',join:'#34d399',leave:'#f87171'};
+function addLog(type,msg){
+  var el=document.getElementById('log-entries');if(!el)return;
+  var tm=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  var d=document.createElement('div');d.style.cssText='font-size:11px;color:'+(LC[type]||'#6b7280')+';margin-bottom:2px';
+  d.textContent='['+tm+'] ['+type.toUpperCase()+'] '+msg;
+  el.prepend(d);if(el.children.length>80)el.lastChild.remove();
+}
+
+// ── Demo Mode ─────────────────────────────────────────
+function demoMode(){
+  setConn('no');
+  var def='// Welcome to CodeSync!\n\nconst greet = (name) => {\n  return `Hello, ${name}!`;\n};\n\nconsole.log(greet(\'World\'));\n';
+  suppress=true;getTA().value=def;suppress=false;
+  lastDoc=def;synced=true;updateLineNums();
+  peers.set('demo',{userId:'demo',username:'Demo User',color:'#a78bfa',isTyping:false});
+  updUI();toast('👾','Demo mode','Server offline — UI preview only');
+  addLog('info','Demo mode — server offline');
+}
+
+
+
+// ════════════════════════════════════════════════════
+//  PHASE 3 — AI Assistant, Version History, Export
+// ════════════════════════════════════════════════════
+
+// ── Version History ───────────────────────────────
+var history3 = []; // {ver, doc, timestamp, user, label}
+var MAX_HIST = 50;
+
+function saveSnapshot(label) {
+  var doc = getTA().value;
+  if (history3.length > 0 && history3[history3.length-1].doc === doc) return;
+  history3.push({
+    ver: sver,
+    doc: doc,
+    timestamp: Date.now(),
+    user: myName,
+    label: label || 'edit',
+    lang: document.getElementById('lang-sel').value
+  });
+  if (history3.length > MAX_HIST) history3.shift();
+}
+
+// Auto-save snapshot every 30s
+setInterval(function() {
+  if (synced && getTA().value) saveSnapshot('auto-save');
+}, 30000);
+
+// Save on every ack (version confirmed by server)
+var _origAck = null; // hook in after socket init
+
+function renderHistory() {
+  var el = document.getElementById('hist-list');
+  if (history3.length === 0) {
+    el.innerHTML = '<div class="hist-empty">No history yet.<br>Start editing to record versions.</div>';
+    return;
+  }
+  var items = history3.slice().reverse();
+  el.innerHTML = items.map(function(h, i) {
+    var isCurrent = i === 0;
+    var tm = new Date(h.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var date = new Date(h.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    var color = COLORS[history3.indexOf(h) % COLORS.length];
+    return '<div class="hist-item'+(isCurrent?' current':'')+'">' +
+      '<div class="hist-dot" style="background:'+color+'"></div>' +
+      '<div class="hist-info">' +
+        '<div class="hist-ver">v'+h.ver+' — '+h.label+'</div>' +
+        '<div class="hist-meta">'+date+' '+tm+' · '+h.user+' · '+h.doc.length+' chars</div>' +
+      '</div>' +
+      (isCurrent
+        ? '<span style="font-size:10px;color:var(--ac);font-weight:700">CURRENT</span>'
+        : '<button class="hist-restore" onclick="restoreVersion('+history3.indexOf(h)+')">Restore</button>'
+      ) +
+    '</div>';
+  }).join('');
+}
+
+function restoreVersion(idx) {
+  var snap = history3[idx];
+  if (!snap) return;
+  if (!confirm('Restore to v'+snap.ver+'? This will overwrite current content for all users.')) return;
+  suppress = true;
+  getTA().value = snap.doc;
+  suppress = false;
+  lastDoc = snap.doc;
+  updateLineNums();
+  // Send as a full replace op
+  var op = mkDiff(getTA().value, snap.doc);
+  if (op.ops.length > 0) sendOp(op);
+  saveSnapshot('restored v'+snap.ver);
+  toast('⏪','Restored!','v'+snap.ver+' — '+snap.doc.length+' chars');
+  swPanel('out', document.getElementById('ptab-out'));
+}
+
+function clearHistory() {
+  if (!confirm('Clear all history?')) return;
+  history3 = [];
+  renderHistory();
+  toast('🗑','History cleared','');
+}
+
+// Hook into ack to auto-save
+var _ackSnap = 0;
+var origInput = null;
+document.addEventListener('DOMContentLoaded', function() {
+  // Save snapshot every 5 versions
+  var origSendOp = sendOp;
+  // patch: save after every 5th op
+});
+
+// ── AI Assistant ──────────────────────────────────
+var aiHistory = []; // {role, content}
+
+function aiQuick(action) {
+  var prompts = {
+    explain: 'Explain what this code does in simple terms:',
+    fix: 'Find and fix any bugs in this code. Show the corrected code:',
+    optimize: 'Optimize this code for performance and readability:',
+    comment: 'Add clear, helpful comments to this code:',
+    test: 'Write unit tests for this code:',
+    convert: 'Convert this code to Python:'
+  };
+  var code = getTA().value;
+  var prompt = prompts[action] + '\n\n```\n' + code.slice(0, 3000) + '\n```';
+  document.getElementById('ai-input').value = prompt;
+  sendAI();
+}
+
+function sendAI() {
+  var inp = document.getElementById('ai-input');
+  var msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
+
+  // Add user message
+  addAIMsg('user', msg);
+  aiHistory.push({role:'user', content: msg});
+
+  // Show thinking indicator
+  var thinkId = 'think-'+Date.now();
+  var msgs = document.getElementById('ai-msgs');
+  var think = document.createElement('div');
+  think.id = thinkId;
+  think.className = 'ai-thinking';
+  think.innerHTML = '<div style="display:flex;gap:3px"><div class="ai-tdot"></div><div class="ai-tdot"></div><div class="ai-tdot"></div></div> AI is thinking...';
+  msgs.appendChild(think);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  var btn = document.getElementById('ai-send-btn');
+  btn.disabled = true;
+
+  // Include current code as context
+  var code = getTA().value;
+  var lang = document.getElementById('lang-sel').value;
+  var truncated = code.length > 2000 ? code.slice(0,2000) + '\n...(truncated)' : code;
+  var systemMsg = 'You are an expert ' + lang + ' developer and coding assistant embedded in CodeSync, a real-time collaborative code editor. ' +
+    'The user is currently editing ' + lang + ' code. Be concise and practical. ' +
+    'When showing code, use markdown code blocks. Current code in editor (' + code.length + ' chars):\n\n' +
+    '```' + lang + '\n' + truncated + '\n```';
+
+  // Build messages for API
+  var messages = [];
+  // Include last 6 exchanges for context
+  var recentHistory = aiHistory.slice(-12);
+  for (var i=0; i<recentHistory.length-1; i++) {
+    messages.push(recentHistory[i]);
+  }
+  messages.push({role:'user', content: systemMsg + '\n\nUser question: ' + msg});
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': window.ANTHROPIC_API_KEY || '',
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: messages
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var el = document.getElementById(thinkId);
+    if (el) el.remove();
+    btn.disabled = false;
+
+    if (data.error) {
+      if (data.error && data.error.type === 'authentication_error') {
+        addAIMsg('bot', '🔑 **API Key Required**\n\nTo enable AI assistant:\n1. Get your key from console.anthropic.com\n2. Click the **⚙ Set API Key** button above\n3. Paste your key and click Save');
+      } else {
+        addAIMsg('bot', '❌ API Error: ' + (data.error ? data.error.message : JSON.stringify(data)));
+      }
+      return;
+    }
+
+    var reply = data.content && data.content[0] ? data.content[0].text : 'No response';
+    aiHistory.push({role:'assistant', content: reply});
+    addAIMsg('bot', reply);
+
+    // If response contains code block, offer to apply it
+    var codeMatch = reply.match(/```(?:\w+)?\n([\s\S]+?)```/);
+    if (codeMatch) {
+      var extracted = codeMatch[1].trim();
+      var applyBtn = document.createElement('div');
+      applyBtn.style.cssText = 'padding:6px 12px;';
+      applyBtn.innerHTML = '<button onclick="applyAICode('+JSON.stringify(extracted).replace(/'/g,"&#39;")+')" style="padding:5px 12px;background:var(--ac2);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">⬇ Apply code to editor</button>';
+      document.getElementById('ai-msgs').appendChild(applyBtn);
+      document.getElementById('ai-msgs').scrollTop = document.getElementById('ai-msgs').scrollHeight;
+    }
+  })
+  .catch(function(e) {
+    var el = document.getElementById(thinkId);
+    if (el) el.remove();
+    btn.disabled = false;
+    addAIMsg('bot', '❌ Connection error. Make sure you have internet access and a valid API key.\n\nTo enable AI: open the HTML source and add your Anthropic API key.');
+  });
+}
+
+function applyAICode(code) {
+  saveSnapshot('before-ai-apply');
+  suppress = true;
+  getTA().value = code;
+  suppress = false;
+  var op = mkDiff(lastDoc, code);
+  lastDoc = code;
+  if (op.ops.length > 0 && pending.length === 0) sendOp(op);
+  updateLineNums();
+  toast('✨','AI code applied!','');
+  swPanel('out', document.getElementById('ptab-out'));
+  getTA().focus();
+}
+
+function addAIMsg(role, text) {
+  var msgs = document.getElementById('ai-msgs');
+  var isBot = role === 'bot';
+  var div = document.createElement('div');
+  div.className = 'ai-msg ' + (isBot ? '' : 'user');
+
+  // Simple markdown → HTML conversion
+  var html = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```(\w+)?\n([\s\S]+?)```/g, '<pre><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+
+  div.innerHTML =
+    '<div class="ai-av '+(isBot?'bot':'usr')+'">'+(isBot?'✨':'👤')+'</div>' +
+    '<div class="ai-bubble '+(isBot?'bot':'usr')+'">'+html+'</div>';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// Auto-resize AI input
+document.addEventListener('DOMContentLoaded', function() {
+  var ai = document.getElementById('ai-input');
+  ai.addEventListener('keydown', function(e) {
+    if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendAI(); }
+  });
+  ai.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+  });
+});
+
+// ── Export ────────────────────────────────────────
+function openExport() { document.getElementById('export-modal').classList.add('open'); }
+function closeExport() { document.getElementById('export-modal').classList.remove('open'); }
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('export-modal').addEventListener('click', function(e) {
+    if (e.target.id==='export-modal') closeExport();
+  });
+});
+
+function exportAs(fmt) {
+  var code = getTA().value;
+  var lang = document.getElementById('lang-sel').value;
+  var ts = new Date().toISOString().slice(0,19).replace(/:/g,'-');
+  var filename, content, mime;
+
+  if (fmt === 'js') {
+    filename = 'codesync-'+ts+'.js';
+    content = code;
+    mime = 'text/javascript';
+  } else if (fmt === 'html') {
+    filename = 'codesync-'+ts+'.html';
+    var sTag = '<'+'script>';
+    var eTag = '<'+'/script>';
+    content = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8"/>\n<title>CodeSync Export</title>\n</head>\n<body>\n'+sTag+'\n'+code+'\n'+eTag+'\n</body>\n</html>';
+    mime = 'text/html';
+  } else if (fmt === 'txt') {
+    filename = 'codesync-'+ts+'.txt';
+    content = code;
+    mime = 'text/plain';
+  } else if (fmt === 'json') {
+    filename = 'codesync-'+ts+'.json';
+    content = JSON.stringify({
+      room: roomId,
+      language: lang,
+      version: sver,
+      exportedAt: new Date().toISOString(),
+      exportedBy: myName,
+      code: code,
+      history: history3.map(function(h){return {ver:h.ver,timestamp:h.timestamp,user:h.user,label:h.label,chars:h.doc.length};}),
+    }, null, 2);
+    mime = 'application/json';
+  }
+
+  var blob = new Blob([content], {type: mime});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  closeExport();
+  toast('📦','Exported!', filename);
+}
+
+// Hook ack to save history snapshots every 5 versions
+(function() {
+  var snapCount = 0;
+  var _orig = socket; // not available yet, hook after DOMContentLoaded
+  // Instead, hook into the textarea input to auto-save periodically
+  document.addEventListener('DOMContentLoaded', function() {
+    var ta = getTA();
+    var lastSave = 0;
+    ta.addEventListener('input', function() {
+      var now = Date.now();
+      if (now - lastSave > 10000) { // every 10s of typing
+        lastSave = now;
+        saveSnapshot('typing');
+      }
+    });
+  });
+})();
+
+
+// ════════════════════════════════════════════════════
+//  PHASE 4 — Auth, Live Preview, Keyboard Shortcuts,
+//             Stats, Mobile, Notifications
+// ════════════════════════════════════════════════════
+
+// ── Auth System ───────────────────────────────────
+var roomPassword = '';
+var isAuthenticated = false;
+
+function authInit() {
+  document.getElementById('auth-room-name').textContent = roomId;
+  document.getElementById('auth-name').value = myName;
+  document.getElementById('auth-name2').value = myName;
+  // Check if room has password stored
+  var savedAuth = sessionStorage.getItem('auth-'+roomId);
+  if (savedAuth) {
+    // Auto-join if we have session
+    var d = JSON.parse(savedAuth);
+    myName = d.name;
+    roomPassword = d.pass || '';
+    localStorage.setItem('uname', myName);
+    enterApp();
+  }
+}
+
+function authTab(t) {
+  document.getElementById('atab-join').classList.toggle('active', t==='join');
+  document.getElementById('atab-create').classList.toggle('active', t==='create');
+  document.getElementById('auth-join').style.display = t==='join'?'block':'none';
+  document.getElementById('auth-create').style.display = t==='create'?'block':'none';
+}
+
+function authJoin() {
+  var name = document.getElementById('auth-name').value.trim();
+  var pass = document.getElementById('auth-pass').value;
+  if (!name) { showAuthErr('Please enter your name'); return; }
+  myName = name;
+  roomPassword = pass;
+  localStorage.setItem('uname', name);
+  sessionStorage.setItem('auth-'+roomId, JSON.stringify({name:name, pass:pass}));
+  enterApp();
+}
+
+function authCreate() {
+  var name = document.getElementById('auth-name2').value.trim();
+  var pass = document.getElementById('auth-newpass').value;
+  if (!name) { showAuthErr('Please enter your name'); return; }
+  myName = name;
+  roomPassword = pass;
+  localStorage.setItem('uname', name);
+  sessionStorage.setItem('auth-'+roomId, JSON.stringify({name:name, pass:pass}));
+  // Store password for this room
+  if (pass) localStorage.setItem('room-pass-'+roomId, pass);
+  enterApp();
+}
+
+function showAuthErr(msg) {
+  var el = document.getElementById('auth-err');
+  el.textContent = msg; el.style.display='block';
+  setTimeout(function(){el.style.display='none';}, 3000);
+}
+
+function enterApp() {
+  isAuthenticated = true;
+  document.getElementById('auth-screen').style.display = 'none';
+  // Update name display
+  document.getElementById('my-name').value = myName;
+  // Now connect
+  connect();
+  initUI();
+  // Request notifications permission
+  if ('Notification' in window) Notification.requestPermission();
+}
+
+// ── Live Preview ──────────────────────────────────
+var previewTimer = null;
+
+function refreshPreview() {
+  var code = getTA().value;
+  var lang = document.getElementById('lang-sel').value;
+  var frame = document.getElementById('preview-frame');
+  var urlEl = document.getElementById('preview-url');
+
+  if (lang === 'html') {
+    frame.srcdoc = code;
+    urlEl.textContent = 'HTML Preview';
+  } else if (lang === 'css') {
+    frame.srcdoc = '<html><head><style>'+code+'</style></head><body><div class="preview-demo"><h1>Preview</h1><p>Some text to style</p><button>Button</button><ul><li>Item 1</li><li>Item 2</li></ul></div></body></html>';
+    urlEl.textContent = 'CSS Preview';
+  } else if (lang === 'javascript') {
+    var sTag='<'+'script>', eTag='<'+'/script>';
+    frame.srcdoc = '<html><head></head><body><div id="app"></div>'+sTag+'var output=[];console.log=function(){output.push(Array.from(arguments).join(" "));};try{'+
+      code.replace(new RegExp('<\\/script>','gi'),'<\\/script>')+
+      '}catch(e){output.push("Error: "+e.message);}document.body.innerHTML="<pre style=\\"font-family:monospace;padding:12px;background:#0a0b0f;color:#f0f2ff;height:100vh;margin:0\\">"+output.join("\\n")+"</pre>";'+eTag+'</body></html>';
+    urlEl.textContent = 'JS Output Preview';
+  } else {
+    frame.srcdoc = '<html><body style="font-family:monospace;padding:20px;background:#0a0b0f;color:#6b7280"><p>Live preview available for HTML, CSS, and JavaScript</p></body></html>';
+    urlEl.textContent = 'Preview (HTML/CSS/JS only)';
+  }
+}
+
+// Auto-refresh preview when code changes (debounced)
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(function() {
+    var activePanel = document.querySelector('.ptab.active');
+    if (activePanel && activePanel.id === 'ptab-preview') refreshPreview();
+  }, 800);
+}
+
+// ── Stats updater ─────────────────────────────────
+function updStats() {
+  var code = getTA().value;
+  var lines = code.split('\n').length;
+  var chars = code.length;
+  var el_l = document.getElementById('stat-lines');
+  var el_c = document.getElementById('stat-chars');
+  var el_v = document.getElementById('stat-ver');
+  var el_u = document.getElementById('stat-users');
+  if(el_l) el_l.textContent = lines;
+  if(el_c) el_c.textContent = chars;
+  if(el_v) el_v.textContent = sver;
+  if(el_u) el_u.textContent = peers.size + 1;
+}
+
+// ── Desktop Notifications ─────────────────────────
+function sendNotif(title, body) {
+  if (document.hasFocus()) return; // only when tab is in background
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('CodeSync — ' + title, {body:body, icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%235b8aff"/><text y="22" x="6" font-size="18">⚡</text></svg>'});
+  }
+}
+
+// ── In-app notification ───────────────────────────
+function showNotif(msg) {
+  var el = document.getElementById('notif');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(function(){el.classList.remove('show');}, 2500);
+}
+
+// ── Keyboard Shortcuts ────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('keydown', function(e) {
+    var ta = document.activeElement;
+    var inEditor = ta && ta.id === 'code-editor';
+
+    // Ctrl+Enter → Run
+    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); runCode(); return; }
+    // Ctrl+S → Save snapshot
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveSnapshot('manual-save'); toast('💾','Saved!','Snapshot recorded'); return; }
+    // Ctrl+? or Ctrl+/ when not in editor → shortcuts
+    if (e.ctrlKey && e.key === '/' && !inEditor) { document.getElementById('shortcuts-modal').classList.toggle('open'); return; }
+    // Escape → close modals
+    if (e.key === 'Escape') {
+      document.getElementById('shortcuts-modal').classList.remove('open');
+      document.getElementById('export-modal').classList.remove('open');
+      return;
+    }
+
+    if (!inEditor) return;
+
+    // Ctrl+/ → toggle comment
+    if (e.ctrlKey && e.key === '/') {
+      e.preventDefault();
+      var s = ta.selectionStart, end = ta.selectionEnd;
+      var lines = ta.value.split('\n');
+      var before = ta.value.slice(0, s);
+      var lineIdx = before.split('\n').length - 1;
+      var line = lines[lineIdx];
+      if (line.trimStart().startsWith('//')) {
+        lines[lineIdx] = line.replace(/^\/\/\s?/, '');
+      } else {
+        lines[lineIdx] = '// ' + line;
+      }
+      var newVal = lines.join('\n');
+      ta.value = newVal;
+      ta.dispatchEvent(new Event('input'));
+      return;
+    }
+
+    // Shift+Tab → unindent
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      var s2 = ta.selectionStart;
+      var before2 = ta.value.slice(0, s2);
+      if (before2.endsWith('  ')) {
+        ta.value = before2.slice(0,-2) + ta.value.slice(s2);
+        ta.selectionStart = ta.selectionEnd = s2 - 2;
+        ta.dispatchEvent(new Event('input'));
+      }
+      return;
+    }
+
+    // Ctrl+D → duplicate line
+    if (e.ctrlKey && e.key === 'd') {
+      e.preventDefault();
+      var s3 = ta.selectionStart;
+      var lines2 = ta.value.split('\n');
+      var lineIdx2 = ta.value.slice(0,s3).split('\n').length - 1;
+      lines2.splice(lineIdx2+1, 0, lines2[lineIdx2]);
+      ta.value = lines2.join('\n');
+      ta.dispatchEvent(new Event('input'));
+      return;
+    }
+
+    // Ctrl+Shift+K → delete line
+    if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+      e.preventDefault();
+      var s4 = ta.selectionStart;
+      var lines3 = ta.value.split('\n');
+      var lineIdx3 = ta.value.slice(0,s4).split('\n').length - 1;
+      if (lines3.length > 1) {
+        lines3.splice(lineIdx3, 1);
+        ta.value = lines3.join('\n');
+        ta.dispatchEvent(new Event('input'));
+      }
+      return;
+    }
+
+    // Auto-close brackets
+    var pairs = {'(':')', '[':']', '{':'}', '"':'"', "'"  :"'"};
+    if (pairs[e.key] && !e.ctrlKey && !e.metaKey) {
+      var s5=ta.selectionStart, e5=ta.selectionEnd;
+      if (s5===e5) { // no selection
+        e.preventDefault();
+        var v=ta.value;
+        ta.value = v.slice(0,s5)+e.key+pairs[e.key]+v.slice(e5);
+        ta.selectionStart=ta.selectionEnd=s5+1;
+        ta.dispatchEvent(new Event('input'));
+      }
+    }
+  });
+});
+
+// ── Mobile Navigation ─────────────────────────────
+function mobNav(target) {
+  document.querySelectorAll('.mob-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('mob-'+target).classList.add('active');
+  var sp = document.querySelector('.side-panel');
+  if (target === 'editor') {
+    sp.classList.remove('open');
+    setTimeout(function(){getTA().focus();}, 100);
+  } else {
+    sp.classList.add('open');
+    swPanel(target, document.getElementById('ptab-'+target));
+  }
+}
+
+// ── Hook stats into textarea input ───────────────
+document.addEventListener('DOMContentLoaded', function() {
+  var ta = getTA();
+  ta.addEventListener('input', function() {
+    updStats();
+    schedulePreview();
+  });
+  // Initial stats
+  setTimeout(updStats, 500);
+});
+
+// ── API Key Setup ────────────────────────────────
+function setApiKey() {
+  var key = prompt('Enter your Anthropic API key (sk-ant-...):\n\nGet one free at: console.anthropic.com', window.ANTHROPIC_API_KEY || '');
+  if (key && key.startsWith('sk-')) {
+    window.ANTHROPIC_API_KEY = key;
+    localStorage.setItem('anthropic_key', key);
+    toast('🔑','API Key saved!','AI assistant ready');
+    addAIMsg('bot', '✅ API key set! I am ready to help. Try clicking one of the quick action buttons above, or ask me anything about your code.');
+  } else if (key !== null) {
+    toast('❌','Invalid key','Must start with sk-ant-');
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+</script>
+</body>
+</html>
