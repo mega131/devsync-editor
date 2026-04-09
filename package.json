@@ -1,16 +1,21 @@
 {
-  "name": "project4",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "devsync",
+  "version": "6.0.0",
+  "description": "Real-Time Collaborative Code Editor — Full Stack",
+  "main": "server/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "install:all": "npm install && cd server && npm install"
   },
-  "keywords": [],
+  "keywords": ["collaborative", "code-editor", "real-time", "websocket"],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "monaco-editor": "^0.55.1",
     "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
   }
 }

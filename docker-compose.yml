@@ -1,12 +1,47 @@
 version: '3.8'
+
 services:
-  codesync:
+  devsync:
     build: .
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DATABASE_URL=postgresql://postgres:devsync_pass@db:5432/devsync
+      - JWT_SECRET=change-this-secret-in-production
+      # Uncomment to enable AI assistant:
+      # - ANTHROPIC_API_KEY=sk-ant-...
+      # - OPENAI_API_KEY=sk-...
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - /tmp:/tmp   # allow temp files for code execution
+    networks:
+      - devsync-net
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=devsync_pass
+      - POSTGRES_DB=devsync
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - devsync-net
+
+volumes:
+  pgdata:
+
+networks:
+  devsync-net:
+    driver: bridge
